@@ -1,0 +1,30 @@
+{
+  "files": {
+    "main.css": "/course/static/css/main.4de1a23b.chunk.css",
+    "main.js": "/course/static/js/main.3f9eadfb.chunk.js",
+    "main.js.map": "/course/static/js/main.3f9eadfb.chunk.js.map",
+    "runtime-main.js": "/course/static/js/runtime-main.47a3726d.js",
+    "runtime-main.js.map": "/course/static/js/runtime-main.47a3726d.js.map",
+    "static/css/2.1a91e2ac.chunk.css": "/course/static/css/2.1a91e2ac.chunk.css",
+    "static/js/2.50a3d0ae.chunk.js": "/course/static/js/2.50a3d0ae.chunk.js",
+    "static/js/2.50a3d0ae.chunk.js.map": "/course/static/js/2.50a3d0ae.chunk.js.map",
+    "index.html": "/course/index.html",
+    "service-worker.js": "/course/service-worker.js",
+    "service-worker.js.map": "/course/service-worker.js.map",
+    "static/css/2.1a91e2ac.chunk.css.map": "/course/static/css/2.1a91e2ac.chunk.css.map",
+    "static/css/main.4de1a23b.chunk.css.map": "/course/static/css/main.4de1a23b.chunk.css.map",
+    "static/js/2.50a3d0ae.chunk.js.LICENSE.txt": "/course/static/js/2.50a3d0ae.chunk.js.LICENSE.txt",
+    "static/js/Worker.9135dd84.worker.js": "/course/static/js/Worker.9135dd84.worker.js",
+    "static/js/Worker.9135dd84.worker.js.map": "/course/static/js/Worker.9135dd84.worker.js.map",
+    "static/media/language.01e98581.png": "/course/static/media/language.01e98581.png",
+    "static/media/pages.json.5e48284b.load_by_url": "/course/static/media/pages.json.5e48284b.load_by_url",
+    "static/media/python_core.tar.52c987ef.load_by_url": "/course/static/media/python_core.tar.52c987ef.load_by_url"
+  },
+  "entrypoints": [
+    "static/js/runtime-main.47a3726d.js",
+    "static/css/2.1a91e2ac.chunk.css",
+    "static/js/2.50a3d0ae.chunk.js",
+    "static/css/main.4de1a23b.chunk.css",
+    "static/js/main.3f9eadfb.chunk.js"
+  ]
+}
