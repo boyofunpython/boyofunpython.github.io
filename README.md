@@ -44,7 +44,7 @@ Console 與編輯器使用同一個 Python 環境，可直接執行目前檔案�
 
 第一次完整載入後，Service Worker 快取網站與 Python 核心，可離線編輯及執行標準函式庫程式。額外的科學計算套件由固定版本的 Pyodide CDN 按需下載，成功載入後才可離線使用；未下載套件需要網路。瀏覽器清除網站資料或儲存空間不足可能移除快取，請下載重要程式備份。
 
-教室使用原有 PeerJS 服務 `boyofunpython.ddns.net:9000` 與傳輸協定。收到程式須確認，並另存新檔；離開教室即斷線。跨網路 WebRTC 可用性取決於外部服務。CSV 輔助函式保留原遠端資料來源，`loadCSV()` 使用 JSPI，`await aloadCSV()` 可用於非同步程式。
+教室改用公共 PeerServer Cloud（TLS／443）與 PeerJS 預設 ICE 設定，保留程式交換協定。老師建立教室後，可複製分享連結讓同學輸入暱稱加入。切回編輯器、接收程式另存新檔或切換其他頁面會保留教室；按「結束連線」或關閉分頁才離開。收到程式須確認後另存，不覆寫原檔；同學斷線不會關閉其他人的教室連線。公共服務與跨網路 WebRTC 仍受當下服務、網路及 NAT 限制。CSV 輔助函式保留原遠端資料來源，`loadCSV()` 使用 JSPI，`await aloadCSV()` 可用於非同步程式。
 
 原有 futurecoder 課文資料與 MIT 授權保留於 `public/lessons/`，供後續整合；舊版完整課程介面與其 Python 執行器已移除，Console 不提供逐課評分功能。
 
@@ -61,7 +61,7 @@ npm audit --audit-level=moderate
 
 Playwright 預設使用套件配對的 Chromium，headless 測試 production build。可用 `PLAYWRIGHT_CHANNEL=chrome npm test` 改測本機 Chrome。CI 在 Node 24 / 26 執行同樣驗證，Linux 需先執行 `npx playwright install --with-deps chromium`。
 
-測試涵蓋執行、錯誤、中止、逾時、方塊雙向同步、資料移轉、檔案操作、Console 多行／補全／歷史／變數／真實輸入、SVG 動畫／重播／混合輸出、離線、七種視窗尺寸與自動無障礙掃描。教室測試使用模擬傳輸，不接觸正式服務。截圖及量測存在 `artifacts/`，失敗 trace 存在 `test-results/`。
+測試涵蓋執行、錯誤、中止、逾時、方塊雙向同步、資料移轉、檔案操作、Console 多行／補全／歷史／變數／真實輸入、SVG 動畫／重播／混合輸出、離線、七種視窗尺寸與自動無障礙掃描。CI 教室測試使用模擬傳輸；另外以隔離瀏覽器與測試代號實測公共 PeerJS 的分享連結與雙向程式交換，不使用真實學生資料。截圖及量測存在 `artifacts/`，失敗 trace 存在 `test-results/`。
 
 ## 原始碼
 
@@ -82,3 +82,7 @@ Playwright 預設使用套件配對的 Chromium，headless 測試 production bui
 學生與教師可使用自己的 OpenAI、OpenAI 相容服務或 Gemini API Key，選擇提示、除錯、寫程式、備課與出題。可從供應商取得模型清單或手動輸入模型 ID；相容服務以 API Base URL 設定 HTTP／HTTPS 本機與內網服務，可選 Chat Completions 或 Responses。送出前可預覽系統指令與附帶內容；回覆的 Python 可檢查語法、另存或預覽取代，不會自動執行。金鑰與對話只留本分頁記憶體，AI 請求不進離線快取。
 
 環境 system 指令可從介面複製／下載，部署檔為 `ai/python-system.txt`。操作、資料流、限制與官方 API 依據見 [AI 助教設計](docs/ai-assistant.md)。測試使用攔截 API 與假金鑰，不產生模型費用。
+
+教室分享與連線行為見 [教室驗證說明](docs/classroom.md)。
+
+本次 [整體檢查報告](docs/system-check-2026-10-27.md) 另列出舊 CSV 相對路徑資料來源已無法解析的限制。

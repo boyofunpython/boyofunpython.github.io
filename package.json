@@ -14,7 +14,8 @@
     "postinstall": "node scripts/prepare-vendor.mjs",
     "predev": "node scripts/prepare-vendor.mjs",
     "prebuild": "node scripts/prepare-vendor.mjs",
-    "test:toolbox": "node scripts/check-toolboxes.mjs"
+    "test:toolbox": "node scripts/check-toolboxes.mjs",
+    "test:classroom:public": "node scripts/check-classroom-public.mjs"
   },
   "dependencies": {
     "@blockly/field-multilineinput": "13.4.0",

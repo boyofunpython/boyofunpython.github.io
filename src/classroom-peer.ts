@@ -1,10 +1,6 @@
 import { Peer } from "peerjs";
-// Keep the existing classroom wire protocol while updating its browser client.
+// Omit host/key/path/port to use the public PeerServer Cloud and its ICE defaults.
+// Let the server assign a random ID so shared-cloud classrooms cannot collide.
 export function createClassroomPeer() {
-  return new Peer({
-    host: "boyofunpython.ddns.net",
-    key: "killkliAPI",
-    secure: true,
-    port: 9000,
-  });
+  return new Peer({ secure: true });
 }

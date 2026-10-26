@@ -2475,3 +2475,7 @@ code,
     display: none;
   }
 }
+
+.classroom-content[hidden] {
+  display: none;
+}

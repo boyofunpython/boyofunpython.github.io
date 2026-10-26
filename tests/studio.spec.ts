@@ -430,8 +430,23 @@ test.describe("classroom transport", () => {
     await selectFile(page, "main.py");
     await expect(page.locator(".cm-content")).toContainText("teacher draft");
     expect(
-      await page.evaluate(
-        () => (window as unknown as { testDestroyed: boolean }).testDestroyed,
+      await page.evaluate(() =>
+        Boolean(
+          (window as unknown as { testDestroyed?: boolean }).testDestroyed,
+        ),
+      ),
+    ).toBe(false);
+    await openNav(page);
+    await page.getByRole("link", { name: "一起學習", exact: true }).click();
+    await expect(page.getByLabel("連線 ID", { exact: true })).toHaveValue(
+      "test-classroom-id",
+    );
+    await page.getByRole("button", { name: "結束連線", exact: true }).click();
+    expect(
+      await page.evaluate(() =>
+        Boolean(
+          (window as unknown as { testDestroyed?: boolean }).testDestroyed,
+        ),
       ),
     ).toBe(true);
   });

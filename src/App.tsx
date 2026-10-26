@@ -95,6 +95,12 @@ export default function App() {
   const [openedWorkspace, setOpenedWorkspace] = useState(
     () => viewFromHash() === "workspace",
   );
+  const [openedClassroom, setOpenedClassroom] = useState(
+    () => viewFromHash() === "classroom",
+  );
+  useEffect(() => {
+    if (view === "classroom") setOpenedClassroom(true);
+  }, [view]);
   const [openedAssistant, setOpenedAssistant] = useState(
     () => viewFromHash() === "assistant",
   );
@@ -967,8 +973,9 @@ export default function App() {
               )}
             </section>
           )}
-          {view === "classroom" && (
+          {(openedClassroom || view === "classroom") && (
             <Classroom
+              active={view === "classroom"}
               getCode={getCode}
               receive={(code, name) => {
                 addFile(code, name);
