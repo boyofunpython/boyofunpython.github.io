@@ -125,7 +125,7 @@ for (const withText of [false, true]) {
       const area = (await page.locator(".graphics-viewport").boundingBox())!;
       const canvas = (await page.locator("iframe").boundingBox())!;
       const body = (await page.locator(".results-body").boundingBox())!;
-      expect(canvas.width).toBeGreaterThan(40);
+      expect(canvas.width).toBeGreaterThan(100);
       expect(canvas.height).toBeCloseTo(canvas.width, 0);
       expect(canvas.x).toBeGreaterThanOrEqual(area.x - 1);
       expect(canvas.y).toBeGreaterThanOrEqual(area.y - 1);

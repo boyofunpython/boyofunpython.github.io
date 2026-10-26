@@ -1694,6 +1694,11 @@ code,
   }
 }
 @media (max-height: 600px) {
+  .results-dialog[open],
+  .results-dialog.is-expanded {
+    height: calc(100dvh - 20px);
+    max-height: calc(100dvh - 20px);
+  }
   .drawer-bottom > .muted,
   .drawer-bottom .foundation,
   .drawer-bottom .network-state {
@@ -1723,6 +1728,16 @@ code,
   }
   .result-summary {
     padding-bottom: 8px;
+  }
+}
+@media (max-height: 600px) and (min-width: 675px) {
+  .results-body.has-graphics:has(> .text-output) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(200px, 0.55fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .results-body.has-graphics > .text-output {
+    max-height: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
