@@ -153,6 +153,7 @@ export function ResultsDialog({
           </div>
         ) : result ? (
           <>
+            {result.html && <Graphics html={result.html} fit />}
             {(result.text || result.error) && (
               <section className="text-output" aria-label="文字輸出">
                 <div className="text-output-heading">
@@ -173,7 +174,6 @@ export function ResultsDialog({
                 )}
               </section>
             )}
-            {result.html && <Graphics html={result.html} />}
             {!result.text && !result.html && !result.error && (
               <div className="result-placeholder">
                 <Check size={28} />

@@ -75,3 +75,121 @@ test("console preserves explicit repeated SVG displays without repeating stale t
   await send(`display(${JSON.stringify(badge)})`);
   await expect(page.locator("iframe")).toHaveCount(3);
 });
+
+for (const withText of [false, true]) {
+  test(`modal centers and fits the entire turtle canvas${withText ? " alongside long text output" : ""}`, async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "程式碼", exact: true }).click();
+    await page
+      .getByRole("textbox", { name: "Python 程式碼", exact: true })
+      .fill(
+        [
+          "import turtle",
+          'turtle.dot(40, "red")',
+          "turtle.done()",
+          ...(withText ? ["for i in range(100):", '    print("line", i)'] : []),
+        ].join("\n"),
+      );
+    await page.getByRole("button", { name: "執行程式", exact: false }).click();
+    const frame = page.frameLocator("iframe");
+    const svg = frame.locator("svg");
+    await expect(svg).toBeVisible({ timeout: 90000 });
+    await svg.evaluate((element) =>
+      element.setAttribute("data-session", "preserved"),
+    );
+    if (withText)
+      await expect(page.locator(".result-text")).toContainText("line 99");
+    const evidence = [];
+    for (const size of [
+      { width: 1440, height: 1050 },
+      { width: 1024, height: 768 },
+      { width: 390, height: 844 },
+      { width: 320, height: 568 },
+      { width: 844, height: 390 },
+    ]) {
+      await page.setViewportSize(size);
+      await expect
+        .poll(async () => {
+          const area = (await page
+            .locator(".graphics-viewport")
+            .boundingBox())!;
+          const canvas = (await page.locator("iframe").boundingBox())!;
+          return Math.max(
+            Math.abs(canvas.x + canvas.width / 2 - area.x - area.width / 2),
+            Math.abs(canvas.y + canvas.height / 2 - area.y - area.height / 2),
+          );
+        })
+        .toBeLessThan(1);
+      const area = (await page.locator(".graphics-viewport").boundingBox())!;
+      const canvas = (await page.locator("iframe").boundingBox())!;
+      const body = (await page.locator(".results-body").boundingBox())!;
+      expect(canvas.width).toBeGreaterThan(40);
+      expect(canvas.height).toBeCloseTo(canvas.width, 0);
+      expect(canvas.x).toBeGreaterThanOrEqual(area.x - 1);
+      expect(canvas.y).toBeGreaterThanOrEqual(area.y - 1);
+      expect(canvas.x + canvas.width).toBeLessThanOrEqual(
+        area.x + area.width + 1,
+      );
+      expect(canvas.y + canvas.height).toBeLessThanOrEqual(
+        area.y + area.height + 1,
+      );
+      expect(canvas.y).toBeGreaterThanOrEqual(body.y);
+      expect(canvas.y + canvas.height).toBeLessThanOrEqual(
+        body.y + body.height,
+      );
+      await expect
+        .poll(() =>
+          frame
+            .locator("circle")
+            .evaluate((element) => getComputedStyle(element).display),
+        )
+        .not.toBe("none");
+      const dot = (await frame.locator("circle").boundingBox())!;
+      expect(dot.x + dot.width / 2).toBeCloseTo(canvas.x + canvas.width / 2, 0);
+      expect(dot.y + dot.height / 2).toBeCloseTo(
+        canvas.y + canvas.height / 2,
+        0,
+      );
+      expect(
+        await page.locator(".results-body").evaluate((element) => ({
+          overflow: element.scrollHeight - element.clientHeight,
+          top: element.scrollTop,
+        })),
+      ).toEqual({ overflow: 0, top: 0 });
+      expect(
+        await frame
+          .locator("html")
+          .evaluate((element) => element.scrollHeight - innerHeight),
+      ).toBeLessThanOrEqual(1);
+      await expect(svg).toHaveAttribute("data-session", "preserved");
+      evidence.push({ ...size, area, canvas });
+      await page.screenshot({
+        path: `artifacts/turtle-centered-${size.width}-${withText ? "text" : "drawing"}.png`,
+      });
+    }
+    await page.setViewportSize({ width: 1440, height: 1050 });
+    const time = await svg.evaluate((element) =>
+      (element as SVGSVGElement).getCurrentTime(),
+    );
+    await page
+      .getByRole("button", { name: "放大結果視窗", exact: true })
+      .click();
+    await expect(svg).toHaveAttribute("data-session", "preserved");
+    expect(
+      await svg.evaluate((element) =>
+        (element as SVGSVGElement).getCurrentTime(),
+      ),
+    ).toBeGreaterThanOrEqual(time);
+    await page
+      .getByRole("button", { name: "重播繪圖動畫", exact: true })
+      .click();
+    await expect(svg).not.toHaveAttribute("data-session");
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(
+      `artifacts/turtle-centered-${withText ? "text" : "drawing"}.json`,
+      JSON.stringify(evidence, null, 2),
+    );
+  });
+}

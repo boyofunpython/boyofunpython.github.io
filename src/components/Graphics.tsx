@@ -3,7 +3,13 @@ import { RotateCcw } from "lucide-react";
 
 // Native SMIL animates in a script-free sandbox. Do not re-mount the iframe
 // on ordinary resizes, so enlarging a result preserves its animation timeline.
-export function Graphics({ html }: { html: string }) {
+export function Graphics({
+  html,
+  fit = false,
+}: {
+  html: string;
+  fit?: boolean;
+}) {
   const [replay, setReplay] = useState(0);
   const { source, ratio } = useMemo(() => {
     const document = new DOMParser().parseFromString(html, "text/html");
@@ -23,7 +29,10 @@ export function Graphics({ html }: { html: string }) {
     };
   }, [html]);
   return (
-    <section className="graphics" aria-label="繪圖結果">
+    <section
+      className={`graphics ${fit ? "graphics-fit" : ""}`}
+      aria-label="繪圖結果"
+    >
       <div className="graphics-toolbar">
         <h3>繪圖結果</h3>
         <button
@@ -33,14 +42,24 @@ export function Graphics({ html }: { html: string }) {
           <RotateCcw size={15} /> 重播動畫
         </button>
       </div>
-      <iframe
-        key={replay}
-        title="Python 繪圖結果"
-        sandbox=""
-        className="graphics-output"
-        style={{ aspectRatio: String(ratio) }}
-        srcDoc={source}
-      />
+      <div className="graphics-viewport">
+        <iframe
+          key={replay}
+          title="Python 繪圖結果"
+          sandbox=""
+          className="graphics-output"
+          style={{
+            aspectRatio: String(ratio),
+            ...(fit
+              ? {
+                  width: `min(100cqw, calc(100cqh * ${ratio}))`,
+                  height: `min(100cqh, calc(100cqw / ${ratio}))`,
+                }
+              : {}),
+          }}
+          srcDoc={source}
+        />
+      </div>
     </section>
   );
 }
