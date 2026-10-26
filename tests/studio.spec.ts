@@ -414,7 +414,7 @@ test.describe("classroom transport", () => {
       await page.evaluate(
         () => (window as unknown as { testSent: unknown }).testSent,
       ),
-    ).toEqual({ type: "teacherInfo", code: 'print("teacher draft")' });
+    ).toMatchObject({ type: "teacherInfo", code: 'print("teacher draft")' });
     await page.evaluate(() =>
       (
         window as unknown as {

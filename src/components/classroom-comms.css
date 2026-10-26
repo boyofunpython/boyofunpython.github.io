@@ -1,0 +1,500 @@
+.classroom-live {
+  position: fixed;
+  right: 18px;
+  bottom: 42px;
+  z-index: 110;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  pointer-events: none;
+}
+.classroom-dock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 15px;
+  border: 1px solid #c5d5f6;
+  border-radius: 12px;
+  background: #fff;
+  color: #1c4090;
+  box-shadow: 0 4px 20px #233f701e;
+  font-weight: 650;
+  font-size: 13px;
+  pointer-events: auto;
+}
+.classroom-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #90a0b9;
+}
+.classroom-dot.connected {
+  background: #238365;
+  box-shadow: 0 0 0 3px #e4f5ef;
+}
+.classroom-dock b,
+.classroom-comms-tabs b {
+  background: var(--blue);
+  color: #fff;
+  min-width: 21px;
+  padding: 2px 6px;
+  font-size: 11px;
+  border-radius: 10px;
+}
+.classroom-arrival {
+  display: flex;
+  width: min(360px, calc(100vw - 28px));
+  background: #edf6ff;
+  border: 1px solid #c7d9f3;
+  border-radius: 11px;
+  box-shadow: 0 4px 22px #223c6526;
+  pointer-events: auto;
+}
+.classroom-arrival button {
+  border: 0;
+  background: transparent;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: #234575;
+  padding: 13px;
+}
+.classroom-arrival button:first-child {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.classroom-arrival svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.classroom-comms {
+  position: fixed;
+  z-index: 110;
+  right: 18px;
+  bottom: 42px;
+  width: min(410px, calc(100vw - 24px));
+  height: min(670px, calc(100dvh - 110px));
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border: 1px solid #cad6e8;
+  border-radius: 14px;
+  box-shadow: 0 10px 50px #1e355b33;
+  color: var(--ink);
+  overflow: hidden;
+}
+.classroom-comms > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 12px;
+  background: #f6f9fd;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.classroom-comms h2 {
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.classroom-comms h2:focus {
+  outline: none;
+}
+.classroom-comms > header p {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 5px 0 0;
+}
+.classroom-comms-tabs {
+  display: flex;
+  gap: 5px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.classroom-comms-tabs button {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  flex: 1;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  padding: 8px;
+  font-size: 13px;
+  border-radius: 7px;
+  color: var(--muted);
+}
+.classroom-comms-tabs button[aria-pressed="true"] {
+  color: #204aaf;
+  background: #eaf0ff;
+  font-weight: 650;
+}
+.classroom-messages {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 16px 14px;
+}
+.classroom-comms-empty {
+  margin: 20px auto;
+  padding: 12px;
+  max-width: 300px;
+  color: var(--muted);
+  text-align: left;
+}
+.classroom-comms-empty > svg {
+  color: #287a63;
+  margin-bottom: 8px;
+}
+.classroom-comms-empty h3 {
+  font-size: 15px;
+  color: var(--ink);
+  line-height: 1.6;
+  margin: 6px 0;
+}
+.classroom-comms-empty p {
+  font-size: 12px;
+  line-height: 1.85;
+}
+.classroom-message {
+  padding: 11px 13px;
+  background: #f1f5fa;
+  border-radius: 9px;
+  margin: 0 20px 13px 0;
+}
+.classroom-message.outgoing {
+  background: #eaf2ff;
+  margin: 0 0 13px 20px;
+}
+.classroom-message > div,
+.classroom-code-card > div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+}
+.classroom-message time,
+.classroom-code-card time {
+  font-size: 10px;
+  color: #5b6e86;
+  white-space: nowrap;
+}
+.classroom-message p {
+  font-size: 13px;
+  line-height: 1.85;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 6px 0 0;
+}
+.classroom-message-kind {
+  display: block;
+  font-size: 11px;
+  margin-top: 7px;
+  color: #315d80;
+  overflow-wrap: anywhere;
+}
+.classroom-composer {
+  padding: 12px;
+  border-top: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.classroom-composer label,
+.classroom-submit-code label,
+.classroom-review-feedback label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.classroom-composer textarea,
+.classroom-submit-code textarea,
+.classroom-review-feedback textarea {
+  width: 100%;
+  min-height: 70px;
+  max-height: 130px;
+  resize: vertical;
+  padding: 10px;
+  border: 1px solid #bac9df;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: #fafcfe;
+}
+.classroom-composer > div,
+.classroom-review-submit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  margin-top: 9px;
+}
+.classroom-composer > div > span {
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 10px;
+}
+.classroom-composer button,
+.classroom-code-card button,
+.classroom-submit-code button,
+.classroom-review-tools button,
+.classroom-review-submit button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #ccd6e6;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  background: #fff;
+}
+.classroom-composer button.primary,
+.classroom-submit-code button.primary,
+.classroom-review-submit button.primary {
+  background: var(--blue);
+  color: white;
+  border-color: var(--blue);
+}
+.classroom-composer .classroom-clear {
+  padding: 6px;
+  border: 0;
+}
+.classroom-composer .classroom-send-file {
+  display: flex;
+  width: 100%;
+  background: #f4f7fc;
+  margin-top: 9px;
+  overflow-wrap: anywhere;
+}
+.classroom-comms > footer {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 13px;
+  border-top: 1px solid var(--line);
+  font-size: 10px;
+  color: var(--muted);
+  background: #fafbfd;
+  flex-shrink: 0;
+}
+.classroom-comms > footer a {
+  color: var(--blue);
+  font-size: 11px;
+  text-decoration: underline;
+}
+.classroom-code-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 12px;
+}
+.classroom-submit-code {
+  border: 1px solid #cddbed;
+  background: #f3f7fd;
+  border-radius: 10px;
+  padding: 13px;
+  margin-bottom: 16px;
+}
+.classroom-submit-code h3 {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.classroom-submit-code p {
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.classroom-submit-code button {
+  width: 100%;
+  margin-top: 11px;
+}
+.classroom-code-card {
+  border: 1px solid var(--line);
+  border-left: 3px solid #82cbb6;
+  border-radius: 9px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.classroom-code-card h3 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  margin: 9px 0;
+  overflow-wrap: anywhere;
+}
+.classroom-code-card h3 b {
+  font-size: 10px;
+  font-weight: 500;
+  color: #276b54;
+  background: #e5f5ef;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.classroom-code-card p,
+.classroom-code-card blockquote {
+  font-size: 12px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 8px 0;
+}
+.classroom-code-card > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.classroom-code-actions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.classroom-code-actions button:first-child {
+  color: #2356bf;
+  background: #edf3ff;
+  border-color: #cfddfa;
+}
+.classroom-submissions-title {
+  font-size: 12px;
+  margin: 18px 0 12px;
+  color: var(--muted);
+}
+.classroom-delivery {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: #306451;
+}
+.classroom-code-card blockquote {
+  margin-left: 0;
+  border-left: 2px solid #93c9b7;
+  padding-left: 9px;
+}
+.classroom-comms-error {
+  padding: 9px 12px;
+  color: #764019;
+  background: #fff3e3;
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0;
+  flex-shrink: 0;
+}
+.dialog.classroom-review {
+  width: min(1000px, calc(100vw - 24px));
+}
+.classroom-review-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.classroom-review-meta span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.classroom-review-hint {
+  color: var(--muted);
+  line-height: 1.7;
+}
+.classroom-full-code {
+  max-height: 42dvh;
+  min-height: 130px;
+  overflow: auto;
+  background: #f1f5fb;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 15px;
+  font-size: 13px;
+  line-height: 1.7;
+  tab-size: 4;
+}
+.classroom-question {
+  margin: 15px 0;
+  border-left: 3px solid #82cbb6;
+  padding: 9px 13px;
+  background: #eff8f4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.classroom-question p {
+  margin: 5px 0 0;
+}
+.classroom-review-tools {
+  display: flex;
+  gap: 10px;
+}
+.classroom-review-feedback {
+  border-top: 1px solid var(--line);
+  padding-top: 17px;
+  margin-top: 17px;
+}
+.classroom-review-submit span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.classroom-review-status {
+  color: #21664c;
+  line-height: 1.6;
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  .classroom-live {
+    right: 12px;
+    bottom: 38px;
+  }
+  .classroom-comms {
+    right: 10px;
+    bottom: 34px;
+    width: calc(100vw - 20px);
+    height: min(680px, calc(100dvh - 86px));
+  }
+  .classroom-dock {
+    padding: 10px 12px;
+  }
+  .classroom-composer textarea,
+  .classroom-submit-code textarea,
+  .classroom-review-feedback textarea {
+    font-size: 16px;
+  }
+  .dialog.classroom-review {
+    padding: 17px;
+  }
+  .classroom-review-submit {
+    flex-wrap: wrap;
+  }
+  .classroom-review-submit button {
+    margin-left: auto;
+  }
+}
+@media (max-height: 500px) {
+  .classroom-comms {
+    height: calc(100dvh - 48px);
+    bottom: 10px;
+  }
+  .classroom-composer textarea {
+    min-height: 42px;
+    max-height: 70px;
+  }
+  .classroom-comms > footer span {
+    display: none;
+  }
+}

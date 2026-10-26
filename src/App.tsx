@@ -308,6 +308,7 @@ export default function App() {
         event.preventDefault();
       }
       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        if (document.querySelector("dialog[open]")) return;
         event.preventDefault();
         actions.current.execute();
       }
@@ -976,6 +977,7 @@ export default function App() {
           {(openedClassroom || view === "classroom") && (
             <Classroom
               active={view === "classroom"}
+              filename={current.name}
               getCode={getCode}
               receive={(code, name) => {
                 addFile(code, name);

@@ -7,85 +7,10 @@ import {
   classroomName,
 } from "../src/classroom";
 
-// CI remains deterministic. Public-cloud acceptance uses two isolated real
-// browsers and synthetic data via artifacts/verify-public-classroom.mjs.
+// CI remains deterministic. Public-cloud acceptance uses three isolated real
+// browsers and synthetic data via scripts/check-classroom-public.mjs.
 test.use({ serviceWorkers: "block" });
-const fixture = `
-class Connection {
-  constructor(name='測試端') { this.metadata={name}; this.peer='test-'+Math.random(); this.open=false; this.handlers={}; this.sent=[]; }
-  on(event, fn) { this.handlers[event]=fn; }
-  emit(event, data) { if(event==='open')this.open=true; if(event==='close')this.open=false; this.handlers[event]?.(data); }
-  send(data) { this.sent.push(data); }
-  close() { this.emit('close'); }
-}
-class Peer {
-  constructor() { this.handlers={}; this.disconnected=false; this.destroyed=false; this.connectCount=0; window.room=this; this.id='test-room-'+(window.roomCount=(window.roomCount||0)+1); }
-  on(event,fn) { this.handlers[event]=fn; if(event==='open')setTimeout(()=>fn(this.id),5); }
-  emit(event,data) { if(event==='disconnected')this.disconnected=true; this.handlers[event]?.(data); }
-  connect(id,options) { this.connectCount++; this.target=id; this.options=options; this.outgoing=new Connection(); setTimeout(()=>this.outgoing.emit('open'),5); return this.outgoing; }
-  add(name) { const c=new Connection(name); this.connections??=[];this.connections.push(c); this.emit('connection',c); c.emit('open'); return c; }
-  disconnect() { this.emit('disconnected'); }
-  reconnect() { this.disconnected=false; setTimeout(()=>this.emit('open',this.id),5); }
-  destroy() { this.destroyed=true; this.outgoing?.close(); this.connections?.forEach(c=>c.close()); this.emit('close'); }
-}
-export function createClassroomPeer(){return new Peer();}
-`;
-async function setup(page: Page, query = "") {
-  await page.route("**/assets/classroom-peer-*.js", (route) =>
-    route.fulfill({ contentType: "text/javascript", body: fixture }),
-  );
-  await page.addInitScript(() => {
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: {
-        writeText: async (text: string) => {
-          (window as unknown as { copiedLink: string }).copiedLink = text;
-        },
-      },
-    });
-    localStorage.setItem(
-      "boyo-studio-v1",
-      JSON.stringify({
-        activeId: "main",
-        files: [
-          { id: "main", name: "main.py", code: "print('original lesson')" },
-        ],
-      }),
-    );
-  });
-  await page.goto(`/${query}#/classroom`);
-}
-type TestConnection = {
-  open: boolean;
-  sent: unknown[];
-  send(data: unknown): void;
-  emit(event: string, data?: unknown): void;
-  close(): void;
-};
-type TestPeer = {
-  id: string;
-  destroyed: boolean;
-  connectCount: number;
-  target: string;
-  options: unknown;
-  connections: TestConnection[];
-  outgoing: TestConnection;
-  add(name?: unknown): TestConnection;
-  emit(event: string, data?: unknown): void;
-};
-const peer = (page: Page, code: (room: TestPeer) => unknown) =>
-  page.evaluate((code) => {
-    const fn = new Function("room", `return (${code})(room)`);
-    return fn((window as unknown as { room: TestPeer }).room);
-  }, code.toString());
-async function create(page: Page) {
-  await page.getByRole("button", { name: "建立教室", exact: false }).click();
-  await expect(page.getByLabel("連線 ID", { exact: true })).not.toHaveValue("");
-}
-async function roomView(page: Page) {
-  await page.getByRole("button", { name: "開啟選單", exact: true }).click();
-  await page.getByRole("link", { name: "一起學習", exact: true }).click();
-}
+import { setup, peer, create, roomView } from "./fixtures/classroom";
 
 test("share URL preserves deployment path and shares only the current room ID", () => {
   const url = classroomShareURL(
@@ -132,8 +57,12 @@ test("teacher link copies exactly, pre-fills student ID and survives editing", a
   await page
     .getByRole("button", { name: "傳送目前程式給同學", exact: true })
     .click();
-  expect(await peer(page, (p) => p.connections[0].sent)).toEqual([
-    { type: "teacherInfo", code: "print('updated lesson')" },
+  expect(await peer(page, (p) => p.connections[0].sent)).toMatchObject([
+    {
+      type: "teacherInfo",
+      code: "print('updated lesson')",
+      filename: "main.py",
+    },
   ]);
   await page.getByRole("button", { name: "結束連線", exact: true }).click();
   expect(await peer(page, (p) => p.destroyed)).toBe(true);
