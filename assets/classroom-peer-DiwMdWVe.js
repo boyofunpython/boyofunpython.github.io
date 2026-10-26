@@ -1,1 +1,0 @@
-import{t as e}from"./peerjs-CfemTNxx.js";function t(){return new e({host:`boyofunpython.ddns.net`,key:`killkliAPI`,secure:!0,port:9e3})}export{t as createClassroomPeer};

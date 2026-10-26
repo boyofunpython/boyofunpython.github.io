@@ -1,0 +1,1 @@
+import{t as e}from"./peerjs-CfemTNxx.js";function t(){return new e({secure:!0})}export{t as createClassroomPeer};
