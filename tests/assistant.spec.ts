@@ -1,12 +1,16 @@
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { readFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import {
   AI_TIMEOUT,
   askAI,
   endpointFor,
   prepareRequest,
   readReply,
+  listModels,
+  modelsEndpointFor,
+  MODEL_TIMEOUT,
   type AIConfig,
   type Provider,
 } from "../src/ai/client";
@@ -31,6 +35,317 @@ const openaiReply = (text = pythonAnswer) => ({
     { type: "message", content: [{ type: "output_text", text }] },
   ],
   usage: { input_tokens: 80, output_tokens: 30 },
+});
+
+test("model discovery preserves gateway paths, handles Gemini pages, and rejects invalid results", async () => {
+  for (const endpoint of [
+    "http://192.168.1.20:11434/v1/chat/completions",
+    "http://llm.local:8000/api/v1/chat/completions/",
+    "http://10.0.0.5/v1/chat/completions",
+    "http://[fd00::1234]:8000/v1/chat/completions",
+  ]) {
+    expect(endpointFor({ ...config, provider: "compatible", endpoint })).toBe(
+      new URL(endpoint).href,
+    );
+    expect(
+      modelsEndpointFor({ ...config, provider: "compatible", endpoint }),
+    ).toBe(
+      new URL(endpoint).href.replace(/\/chat\/completions\/?$/, "/models"),
+    );
+  }
+  expect(modelsEndpointFor(config)).toBe("https://api.openai.com/v1/models");
+  const original = globalThis.fetch;
+  try {
+    let calls = 0;
+    globalThis.fetch = async (url, options) => {
+      expect(String(url)).toContain(
+        "https://generativelanguage.googleapis.com/v1beta/models?",
+      );
+      expect(String(url)).not.toContain(FAKE_KEY);
+      expect(options).toMatchObject({
+        method: "GET",
+        cache: "no-store",
+        credentials: "omit",
+        redirect: "error",
+        headers: { "x-goog-api-key": FAKE_KEY },
+      });
+      if (calls++ === 0)
+        return Response.json({
+          models: [
+            {
+              name: "models/mock-b",
+              displayName: "Model B",
+              supportedGenerationMethods: ["generateContent"],
+            },
+            {
+              name: "models/embed",
+              supportedGenerationMethods: ["embedContent"],
+            },
+          ],
+          nextPageToken: "page 2 & next",
+        });
+      expect(new URL(String(url)).searchParams.get("pageToken")).toBe(
+        "page 2 & next",
+      );
+      return Response.json({
+        models: [
+          {
+            name: "models/mock-a",
+            supportedGenerationMethods: ["generateContent"],
+          },
+          {
+            name: "models/mock-b",
+            supportedGenerationMethods: ["generateContent"],
+          },
+        ],
+      });
+    };
+    expect(
+      (
+        await listModels(
+          { ...config, provider: "gemini", model: "" },
+          new AbortController().signal,
+        )
+      ).map((m) => m.id),
+    ).toEqual(["mock-a", "mock-b"]);
+    expect(calls).toBe(2);
+    globalThis.fetch = async () => Response.json({ data: [] });
+    await expect(
+      listModels(config, new AbortController().signal),
+    ).rejects.toThrow(/沒有取得可用模型/);
+    globalThis.fetch = async () => Response.json({ unrelated: [] });
+    await expect(
+      listModels(config, new AbortController().signal),
+    ).rejects.toThrow(/格式不符/);
+    globalThis.fetch = async () =>
+      Response.json({ models: [], nextPageToken: "same-token" });
+    await expect(
+      listModels(
+        { ...config, provider: "gemini" },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow(/分頁/);
+    await expect(
+      listModels({ ...config, key: "" }, new AbortController().signal),
+    ).rejects.toThrow(/API Key/);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("provider model selection sends only GET metadata and handles key changes, failures and timeout", async ({
+  page,
+}) => {
+  await start(page);
+  await settings(page);
+  await page.getByRole("button", { name: "連線設定", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "AI 連線設定" });
+  let calls = 0;
+  await page.route("https://api.openai.com/v1/models", async (route) => {
+    calls++;
+    expect(route.request().method()).toBe("GET");
+    expect(route.request().postData()).toBeNull();
+    expect(route.request().headers().authorization).toBe(`Bearer ${FAKE_KEY}`);
+    await route.fulfill(
+      calls === 1
+        ? {
+            json: {
+              data: [{ id: "mock-b" }, { id: "mock-a" }, { id: "mock-a" }],
+            },
+          }
+        : { status: 401, json: { error: FAKE_KEY } },
+    );
+  });
+  await dialog
+    .getByRole("button", { name: "取得模型清單", exact: true })
+    .click();
+  await expect(dialog.getByRole("status")).toContainText("2 個模型");
+  await expect(dialog.getByLabel("模型 ID", { exact: true })).toHaveValue(
+    "mock-model",
+  );
+  await dialog
+    .getByRole("combobox", { name: "選擇供應商模型" })
+    .selectOption("mock-a");
+  await expect(dialog.getByLabel("模型 ID", { exact: true })).toHaveValue(
+    "mock-a",
+  );
+  const scan = await new AxeBuilder({ page }).include(".ai-settings").analyze();
+  expect(scan.violations).toEqual([]);
+  await page.screenshot({ path: "artifacts/ai-provider-model-list.png" });
+  await dialog
+    .getByRole("button", { name: "取得模型清單", exact: true })
+    .click();
+  await expect(dialog.getByRole("alert")).toContainText("API 401");
+  await expect(dialog.getByRole("alert")).not.toContainText(FAKE_KEY);
+  await expect(dialog.getByLabel("模型 ID", { exact: true })).toHaveValue(
+    "mock-a",
+  );
+  expect(calls).toBe(2);
+  await page.unroute("https://api.openai.com/v1/models");
+  await page.route("https://api.openai.com/v1/models", async (route) => {
+    await new Promise((r) => setTimeout(r, 400));
+    await route
+      .fulfill({ json: { data: [{ id: "stale-model" }] } })
+      .catch(() => {});
+  });
+  await dialog
+    .getByRole("button", { name: "取得模型清單", exact: true })
+    .click();
+  await dialog.getByLabel("API Key", { exact: false }).fill("changed-test-key");
+  await expect(
+    dialog.getByRole("combobox", { name: "選擇供應商模型" }),
+  ).toHaveCount(0);
+  // A late response from the old key must not repopulate the list.
+  await expect(
+    dialog.getByRole("button", { name: "取得模型清單", exact: true }),
+  ).toBeEnabled();
+  await page.clock.install();
+  await dialog
+    .getByRole("button", { name: "取得模型清單", exact: true })
+    .click();
+  await page.clock.fastForward(MODEL_TIMEOUT + 1);
+  await expect(dialog.getByRole("alert")).toContainText("超過 20 秒");
+  await expect(
+    dialog.getByRole("combobox", { name: "選擇供應商模型" }),
+  ).toHaveCount(0);
+});
+
+test("Gemini UI lists paginated generateContent models without choosing a model automatically", async ({
+  page,
+}) => {
+  await start(page);
+  await settings(page, "gemini");
+  await page.getByRole("button", { name: "連線設定", exact: true }).click();
+  await page.route(
+    "https://generativelanguage.googleapis.com/v1beta/models?*",
+    async (route) => {
+      const next = new URL(route.request().url()).searchParams.get("pageToken");
+      expect(route.request().headers()["x-goog-api-key"]).toBe(FAKE_KEY);
+      await route.fulfill({
+        json: next
+          ? {
+              models: [
+                {
+                  name: "models/mock-second",
+                  displayName: "Second",
+                  supportedGenerationMethods: ["generateContent"],
+                },
+              ],
+            }
+          : {
+              models: [
+                {
+                  name: "models/embed-only",
+                  supportedGenerationMethods: ["embedContent"],
+                },
+                {
+                  name: "models/mock-first",
+                  supportedGenerationMethods: ["generateContent"],
+                },
+              ],
+              nextPageToken: "next",
+            },
+      });
+    },
+  );
+  const dialog = page.getByRole("dialog", { name: "AI 連線設定" });
+  await dialog
+    .getByRole("button", { name: "取得模型清單", exact: true })
+    .click();
+  await expect(dialog.getByRole("status")).toContainText("2 個模型");
+  await expect(dialog.getByRole("option", { name: "embed-only" })).toHaveCount(
+    0,
+  );
+  await dialog
+    .getByRole("combobox", { name: "選擇供應商模型" })
+    .selectOption("mock-second");
+  await expect(dialog.getByLabel("模型 ID", { exact: true })).toHaveValue(
+    "mock-second",
+  );
+});
+
+test("a real local HTTP provider lists models and accepts chat without an API key", async ({
+  page,
+}) => {
+  const requests: { method: string; url: string; authorization?: string }[] =
+    [];
+  const server = createServer((req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "http://127.0.0.1:4187");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization",
+    );
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    if (req.method === "OPTIONS") {
+      res.writeHead(204).end();
+      return;
+    }
+    requests.push({
+      method: req.method!,
+      url: req.url!,
+      authorization: req.headers.authorization,
+    });
+    res.setHeader("Content-Type", "application/json");
+    res.end(
+      JSON.stringify(
+        req.method === "GET"
+          ? { data: [{ id: "local-python-model" }] }
+          : {
+              choices: [
+                {
+                  message: { content: "本機 HTTP 模型已回覆。" },
+                  finish_reason: "stop",
+                },
+              ],
+            },
+      ),
+    );
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string")
+      throw Error("missing server port");
+    await start(page);
+    await page
+      .getByRole("button", { name: "設定自己的 API Key", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", { name: "AI 連線設定" });
+    await dialog
+      .getByRole("combobox", { name: "AI 服務", exact: true })
+      .selectOption("compatible");
+    await dialog
+      .getByLabel("完整 API 網址", { exact: false })
+      .fill(`http://127.0.0.1:${address.port}/gateway/v1/chat/completions`);
+    await dialog
+      .getByRole("combobox", { name: "服務位置", exact: true })
+      .selectOption("loopback");
+    await dialog
+      .getByRole("button", { name: "取得模型清單", exact: true })
+      .click();
+    await dialog
+      .getByRole("combobox", { name: "選擇供應商模型" })
+      .selectOption("local-python-model");
+    await dialog.getByRole("button", { name: "完成設定", exact: true }).click();
+    await question(page).fill("本機測試");
+    await send(page);
+    await expect(page.locator(".ai-answer")).toContainText(
+      "本機 HTTP 模型已回覆。",
+    );
+    expect(requests).toEqual([
+      { method: "GET", url: "/gateway/v1/models", authorization: undefined },
+      {
+        method: "POST",
+        url: "/gateway/v1/chat/completions",
+        authorization: undefined,
+      },
+    ]);
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve, reject) =>
+      server.close((e) => (e ? reject(e) : resolve())),
+    );
+  }
 });
 async function start(page: Page) {
   await page.addInitScript(
@@ -158,7 +473,6 @@ test("API contracts, endpoint restrictions, response parsing and portable policy
     prepareRequest(config, "r", [{ role: "user", content: "a".repeat(80001) }]),
   ).toThrow(/過長/);
   for (const endpoint of [
-    "http://remote.example/v1",
     "https://user:pass@example.com/v1",
     "https://example.com/v1?key=x",
     "https://example.com/v1#x",

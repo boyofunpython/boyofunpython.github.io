@@ -5,9 +5,9 @@
 ## 開始使用
 
 1. 開啟「設定自己的 API Key」，選 OpenAI、OpenAI 相容服務或 Gemini。
-2. 填入自己帳號可用的模型 ID 與金鑰。相容服務需填完整 Chat Completions 網址，如 `https://your-service.example/v1/chat/completions`；免驗證的本機服務可不填金鑰。網址變動或切換服務會清除金鑰。
+2. 填入自己的金鑰，再按「取得模型清單」並選擇模型，也可直接手動填模型 ID。相容服務需填完整 Chat Completions 網址，如 `http://192.168.1.20:11434/v1/chat/completions`；支援任意 HTTP／HTTPS 主機、連接埠與路徑前綴，免驗證服務可不填金鑰。網址變動或切換服務會清除金鑰。
 3. 選擇學習程度與任務。決定是否附上目前程式、最近主編輯器執行的文字／錯誤；預設附程式，不附執行紀錄。
-4. 輸入問題，按「預覽送出內容」檢查實際 API 內容，再按「送出」。只有送出才會發出可能計費的請求；設定、範例問題與預覽都不會呼叫 API。
+4. 輸入問題，按「預覽送出內容」檢查實際 API 內容，再按「送出」。只有送出才會產生回答；「取得模型清單」只呼叫供應商的模型資料 GET API，不附帶程式或對話。其他設定、範例問題與預覽都不會呼叫 API。
 5. AI 完整 Python 圍欄可複製、只檢查語法、另存新檔，或比較原程式後確認取代。沒有自動執行。如果詢問後原檔已修改或切換，停用取代，仍可另存。
 
 未預設付費模型，以免模型權限、價格或供應商名稱變動造成誤導。輸出 tokens 上限不是總費用上限；思考 tokens 也可能消耗輸出預算。若模型只思考而沒有可見文字，可調整上限、問題或模型。相容服務可能要求 `max_tokens` 或 `max_completion_tokens`，設定可切換；不會自動嘗試不同參數而重複計費。
@@ -63,7 +63,7 @@ for row in rows:
 - 每模式在記憶體顯示最近 20 回合，請求只附最近三組成功且完整的對話；這些歷史仍含先前勾選的資料。取消目前「附上程式」不會移除既有歷史；如需排除舊資料，先清除目前模式對話。失敗或不完整回答不納入後續歷史。
 - 問題 4,000、目前程式 16,000、最近文字輸出 4,000 字元上限。超限會拒絕送出並說明，沒有偷偷截斷。序列化 API body 上限 80,000 字元，回覆上限 1 MB。與 Python 自身的 100,000 字元執行輸出限制不同。
 - 精確符合目前金鑰的文字會在問題、附帶內容、回覆及對話下載中移除。這不是通用密鑰偵測，仍需自行移除其他密鑰及個資。
-- API key 只在 `Authorization: Bearer …` 或 Gemini `x-goog-api-key` 標頭；不用 URL query。官方端點鎖定；自訂僅接受 HTTPS，localhost 可 HTTP，拒絕帳密、query、fragment。禁止跟隨重新導向；不附帶 cookies、referrer，不重試、不替換供應商。服務工作者略過 no-store 或含金鑰標頭的請求。
+- API key 只在 `Authorization: Bearer …` 或 Gemini `x-goog-api-key` 標頭；不用 URL query。官方端點鎖定；自訂支援 HTTP 及 HTTPS（含本機與區域網路），拒絕帳密、query、fragment。禁止跟隨重新導向；不附帶 cookies、referrer，不重試、不替換供應商。服務工作者略過 no-store 或含金鑰標頭的請求。
 - 最長等待 90 秒，可停止等待；供應商可能繼續處理並計費。429、401/403、模型／格式錯誤、網路／CORS、空內容、非 JSON 都顯示可處理的訊息，不顯示原始錯誤回應，避免服務端回顯密鑰。
 - AI HTML 不執行；外部圖片不載入，只顯示替代文字。連結僅允許 HTTP/HTTPS 並隔離新分頁。程式碼不自動執行；中斷或截斷回覆停用套用及語法檢查，仍可閱讀、複製。
 - 瀏覽器個人 BYOK 無法隔離同分頁的第三方腳本或有權讀取頁面的擴充套件。只適合使用者自己的金鑰；學校共用金鑰、集中額度、老師身份驗證與資料治理需要另建後端代理、登入及權限，不能靠學生／教師切換實現。
@@ -76,3 +76,12 @@ for row in rows:
 - Gemini：採用仍提供的 `models.generateContent`，不是 Interactions；`systemInstruction`、user/model contents、`generationConfig.maxOutputTokens`、`store:false`。讀第一候選的非 thought text 與 usageMetadata。[GenerateContent 參考](https://ai.google.dev/api/generate-content)、[金鑰與來源限制](https://ai.google.dev/gemini-api/docs/api-key)。
 
 測試使用假的金鑰與攔截的 API 回覆，不發出付費 AI 請求。供應商帳號權限、付費模型及個別相容服務的實際 CORS 仍須使用者以自己的帳號驗證。
+
+## 模型探索與內網 HTTP（2026-10-26）
+
+- OpenAI 使用 `GET https://api.openai.com/v1/models`，相容服務將完整端點的 `/chat/completions`（可含尾端斜線）替換為 `/models`，保留主機、連接埠及路徑前綴，例如 `/gateway/v1/chat/completions` 對應 `/gateway/v1/models`。[OpenAI 官方模型 API](https://developers.openai.com/api/reference/resources/models/methods/list)。不猜測模型家族、不自動挑選第一個模型；清單只代表供應商列出的模型，不保證可用於目前文字 API。
+- Gemini 使用 `GET https://generativelanguage.googleapis.com/v1beta/models`，依 `nextPageToken` 完成分頁，僅保留 `supportedGenerationMethods` 含 `generateContent` 的模型；移除 ID 的 `models/` 前綴供選擇。[Gemini 官方模型 API](https://ai.google.dev/api/models)。
+- 每次取得最多等待 20 秒、每頁回覆上限 1 MB、最多 10 頁。去除重複 ID；失敗、空清單、格式不符或無法完整分頁時顯示錯誤並保留手動輸入。按鈕可停止；切換服務、端點、金鑰、服務位置或關閉設定會取消並清空清單，舊回覆不會覆蓋新設定。模型 ID 不因載入清單而自動改變。
+- GET 只傳 API Key 標頭及分頁參數，不送程式／問題／對話；不帶 cookies、referrer、不跟隨轉址、不自動重試、`cache:no-store`，也不寫入網站儲存。相容服務沒有金鑰時不送 Authorization，也不增加不必要的 Content-Type 標頭。
+- 「服務位置」預設由瀏覽器判斷；內網自訂 DNS 可選區域網路，本機可選本機服務，分別向支援的瀏覽器傳 `targetAddressSpace: local / loopback`。這不會繞過權限或 CORS；從 GitHub Pages 連到 HTTP 服務時可能出現區域網路／本機權限提示，其他瀏覽器仍可能阻擋混合內容。[Chrome 區域網路存取說明](https://developer.chrome.com/blog/local-network-access)。使用者需允許所選服務的連線，並由服務端開放本站來源的 CORS。
+- 自動測試除了攔截的官方模型回應，也啟動自己的 HTTP 測試服務，實際完成 models GET、CORS 與 Chat Completions POST；不連到使用者的真實內網設備或付費模型。

@@ -611,3 +611,17 @@
 .ai-dialog-body {
   padding: 0;
 }
+
+.ai-model-discovery {
+  border-block: 1px solid var(--line);
+  padding: 4px 0 10px;
+  margin: 0 0 18px;
+}
+.ai-model-discovery .ai-code-actions {
+  border: 0;
+  padding-inline: 0;
+}
+.ai-model-endpoint {
+  overflow-wrap: anywhere;
+  font-family: monospace;
+}

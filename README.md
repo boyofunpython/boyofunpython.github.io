@@ -79,6 +79,6 @@ Playwright 預設使用套件配對的 Chromium，headless 測試 production bui
 
 ## BYOK AI 助教
 
-學生與教師可使用自己的 OpenAI、OpenAI 相容服務或 Gemini API Key，選擇提示、除錯、寫程式、備課與出題。送出前可預覽系統指令與附帶內容；回覆的 Python 可檢查語法、另存或預覽取代，不會自動執行。金鑰與對話只留本分頁記憶體，AI 請求不進離線快取。
+學生與教師可使用自己的 OpenAI、OpenAI 相容服務或 Gemini API Key，選擇提示、除錯、寫程式、備課與出題。可從供應商取得模型清單或手動輸入模型 ID；相容端點支援 HTTP／HTTPS 本機與內網服務。送出前可預覽系統指令與附帶內容；回覆的 Python 可檢查語法、另存或預覽取代，不會自動執行。金鑰與對話只留本分頁記憶體，AI 請求不進離線快取。
 
 環境 system 指令可從介面複製／下載，部署檔為 `ai/python-system.txt`。操作、資料流、限制與官方 API 依據見 [AI 助教設計](docs/ai-assistant.md)。測試使用攔截 API 與假金鑰，不產生模型費用。

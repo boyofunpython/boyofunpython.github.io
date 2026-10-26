@@ -26,6 +26,10 @@ import {
   MAX_OUTPUT,
   MAX_QUESTION,
   askAI,
+  listModels,
+  modelsEndpointFor,
+  MODEL_TIMEOUT,
+  type AIModel,
   prepareRequest,
   redactKey,
   type AIConfig,
@@ -157,6 +161,10 @@ export function AIAssistant({
   applyCode,
 }: Props) {
   const [config, setConfig] = useState<AIConfig>(INITIAL);
+  const [models, setModels] = useState<AIModel[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsError, setModelsError] = useState("");
+  const modelController = useRef<AbortController | null>(null);
   const [role, setRole] = useState<TeachingRole>("student");
   const [intents, setIntents] = useState({
     student: INTENTS.student[0] as string,
@@ -197,6 +205,57 @@ export function AIAssistant({
   useEffect(() => {
     if (active) end.current?.scrollIntoView({ block: "nearest" });
   }, [turns, busy, active]);
+
+  useEffect(() => {
+    modelController.current?.abort();
+    modelController.current = null;
+    setModels([]);
+    setModelsError("");
+    setModelsLoading(false);
+    return () => {
+      modelController.current?.abort();
+      modelController.current = null;
+    };
+  }, [config.provider, config.endpoint, config.key, config.network, settings]);
+  async function loadModels() {
+    if (modelController.current) return;
+    const abort = new AbortController();
+    modelController.current = abort;
+    setModelsLoading(true);
+    setModelsError("");
+    setModels([]);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      abort.abort();
+    }, MODEL_TIMEOUT);
+    try {
+      const available = await listModels({ ...config }, abort.signal);
+      if (modelController.current === abort && !abort.signal.aborted)
+        setModels(available);
+    } catch (e) {
+      if (modelController.current === abort)
+        setModelsError(
+          abort.signal.aborted
+            ? timedOut
+              ? "取得模型清單超過 20 秒；可稍後重試或手動輸入。"
+              : "已停止取得模型清單。"
+            : (e as Error).message,
+        );
+    } finally {
+      clearTimeout(timer);
+      if (modelController.current === abort) {
+        modelController.current = null;
+        setModelsLoading(false);
+      }
+    }
+  }
+  let modelEndpoint = "";
+  try {
+    modelEndpoint = modelsEndpointFor(config);
+  } catch {
+    /* Validation is shown when fetching. */
+  }
 
   function buildMessages(source: CodeSnapshot): Message[] {
     if (!question.trim()) throw new Error("請先寫下問題或教學需求。");
@@ -750,7 +809,9 @@ export function AIAssistant({
                   }
                 />
                 <small>
-                  更換網址會清除金鑰；僅使用你信任且支援瀏覽器 CORS 的服務。
+                  支援
+                  HTTP／HTTPS，本機與區域網路皆可。更換網址會清除金鑰；服務須允許瀏覽器
+                  CORS。
                 </small>
               </label>
             )}
@@ -766,27 +827,9 @@ export function AIAssistant({
                 }
               />
             </label>
-            <p className="ai-small">
-              請從供應商帳號的模型清單填入 ID；此處不會自動發出測試請求。
-              <a
-                href={
-                  config.provider === "gemini"
-                    ? "https://ai.google.dev/gemini-api/docs/models"
-                    : "https://developers.openai.com/api/docs/models"
-                }
-                target="_blank"
-                rel="noreferrer"
-              >
-                {config.provider === "compatible"
-                  ? "相容服務請查自己的服務文件；OpenAI 參考"
-                  : "查看官方模型文件"}
-              </a>
-            </p>
             <label>
               API Key
-              {config.provider === "compatible"
-                ? "（本機免驗證服務可留白）"
-                : ""}
+              {config.provider === "compatible" ? "（免驗證服務可留白）" : ""}
               <input
                 type="password"
                 autoComplete="off"
@@ -798,6 +841,93 @@ export function AIAssistant({
                 }
               />
             </label>
+            {config.provider === "compatible" && (
+              <label>
+                服務位置
+                <select
+                  aria-label="服務位置"
+                  value={config.network ?? ""}
+                  onChange={(e) =>
+                    setConfig((c) => ({
+                      ...c,
+                      network: (e.target.value ||
+                        undefined) as AIConfig["network"],
+                    }))
+                  }
+                >
+                  <option value="">自動判斷</option>
+                  <option value="local">區域網路（含自訂內網網域）</option>
+                  <option value="loopback">本機服務</option>
+                </select>
+                <small>
+                  若瀏覽器詢問，請允許區域網路／本機存取；部分瀏覽器仍可能阻擋
+                  HTTPS 網頁連到 HTTP 服務。
+                </small>
+              </label>
+            )}
+            <div className="ai-model-discovery">
+              <div className="ai-code-actions">
+                <button
+                  disabled={modelsLoading}
+                  onClick={() => void loadModels()}
+                >
+                  {modelsLoading && <LoaderCircle size={14} className="spin" />}
+                  取得模型清單
+                </button>
+                {modelsLoading && (
+                  <button onClick={() => modelController.current?.abort()}>
+                    停止取得
+                  </button>
+                )}
+              </div>
+              {modelEndpoint && (
+                <p className="ai-small ai-model-endpoint">
+                  GET {modelEndpoint}
+                </p>
+              )}
+              <p className="ai-small">
+                只取得模型資料，不送出程式或產生回答。清單不保證每個模型都支援目前文字
+                API；服務未提供清單時仍可手動填模型 ID。
+              </p>
+              {modelsError && (
+                <p className="ai-warning" role="alert">
+                  {modelsError}
+                </p>
+              )}
+              {models.length > 0 && (
+                <>
+                  <label>
+                    選擇供應商模型
+                    <select
+                      aria-label="選擇供應商模型"
+                      value={
+                        models.some((m) => m.id === config.model)
+                          ? config.model
+                          : ""
+                      }
+                      onChange={(e) => {
+                        if (e.target.value)
+                          setConfig((c) => ({ ...c, model: e.target.value }));
+                      }}
+                    >
+                      <option value="">請選擇模型（也可在上方手動輸入）</option>
+                      {models.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <p role="status" className="ai-small">
+                    已取得 {models.length} 個模型
+                    {config.provider === "gemini"
+                      ? "（僅含支援 generateContent 的模型）"
+                      : ""}
+                    ，請自行選擇。
+                  </p>
+                </>
+              )}
+            </div>
             <div className="ai-settings-row">
               <label>
                 輸出 tokens 上限

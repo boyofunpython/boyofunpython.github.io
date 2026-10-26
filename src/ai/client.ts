@@ -1,6 +1,7 @@
 export type Provider = "openai" | "compatible" | "gemini";
 export interface AIConfig {
   provider: Provider;
+  network?: "local" | "loopback";
   endpoint: string;
   model: string;
   key: string;
@@ -35,18 +36,14 @@ export function endpointFor(config: AIConfig) {
     throw new Error("請填寫完整的 Chat Completions API 網址。");
   }
   if (
-    (url.protocol !== "https:" &&
-      !(
-        url.protocol === "http:" &&
-        ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)
-      )) ||
+    !["https:", "http:"].includes(url.protocol) ||
     url.username ||
     url.password ||
     url.search ||
     url.hash
   )
     throw new Error(
-      "API 網址需使用 HTTPS（本機可用 HTTP），且不可包含帳密、查詢參數或 #。",
+      "API 網址需使用 HTTP 或 HTTPS，且不可包含帳密、查詢參數或 #。",
     );
   return url.href;
 }
@@ -172,9 +169,25 @@ export async function askAI(
   signal: AbortSignal,
 ): Promise<AIReply> {
   const request = prepareRequest(config, system, messages);
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
+  const parsed = await requestJSON(
+    config,
+    request.endpoint,
+    signal,
+    request.serialized,
+  );
+  const reply = readReply(config.provider, parsed);
+  return { ...reply, text: redactKey(reply.text, config.key) };
+}
+
+async function requestJSON(
+  config: AIConfig,
+  endpoint: string,
+  signal: AbortSignal,
+  body?: string,
+): Promise<unknown> {
+  const headers: Record<string, string> = body
+    ? { "Content-Type": "application/json" }
+    : {};
   if (config.key.trim())
     headers[config.provider === "gemini" ? "x-goog-api-key" : "Authorization"] =
       config.provider === "gemini"
@@ -182,20 +195,24 @@ export async function askAI(
         : `Bearer ${config.key.trim()}`;
   let response: Response;
   try {
-    response = await fetch(request.endpoint, {
-      method: "POST",
-      body: request.serialized,
-      headers,
-      signal,
-      credentials: "omit",
-      redirect: "error",
-      cache: "no-store",
-      referrerPolicy: "no-referrer",
-    });
+    const options: RequestInit & { targetAddressSpace?: "local" | "loopback" } =
+      {
+        method: body ? "POST" : "GET",
+        body,
+        headers,
+        signal,
+        credentials: "omit",
+        redirect: "error",
+        cache: "no-store",
+        referrerPolicy: "no-referrer",
+      };
+    if (config.provider === "compatible" && config.network)
+      options.targetAddressSpace = config.network;
+    response = await fetch(endpoint, options);
   } catch (error) {
     if (signal.aborted) throw error;
     throw new Error(
-      "無法連線，請檢查網路、API 網址及供應商是否允許瀏覽器 CORS 請求。請勿使用陌生代理轉送金鑰。",
+      "無法連線，請檢查 API 網址、CORS 與瀏覽器的區域網路權限。HTTPS 網頁連到 HTTP 服務也可能受到混合內容限制。",
     );
   }
   if (!response.ok) {
@@ -223,7 +240,7 @@ export async function askAI(
       if (chunk.done) break;
       size += chunk.value.byteLength;
       if (size > 1_000_000)
-        throw new Error("API 回覆過大，請降低輸出 tokens 上限。");
+        throw new Error("API 回覆超過 1 MB，請縮小請求範圍或手動輸入模型 ID。");
       raw += decoder.decode(chunk.value, { stream: true });
     }
     raw += decoder.decode();
@@ -238,6 +255,86 @@ export async function askAI(
       "API 回覆不是有效 JSON，請確認使用正確的文字對話 API 路徑。",
     );
   }
-  const reply = readReply(config.provider, parsed);
-  return { ...reply, text: redactKey(reply.text, config.key) };
+  return parsed;
+}
+
+export interface AIModel {
+  id: string;
+  label: string;
+}
+export const MODEL_TIMEOUT = 20_000;
+export function modelsEndpointFor(config: AIConfig): string {
+  if (config.provider === "openai") return "https://api.openai.com/v1/models";
+  if (config.provider === "gemini")
+    return "https://generativelanguage.googleapis.com/v1beta/models";
+  const url = new URL(endpointFor(config));
+  if (!/\/chat\/completions\/?$/.test(url.pathname))
+    throw new Error(
+      "無法推導模型清單路徑；相容端點應以 /chat/completions 結尾，也可直接手動填模型 ID。",
+    );
+  url.pathname = url.pathname.replace(/\/chat\/completions\/?$/, "/models");
+  return url.href;
+}
+export async function listModels(
+  config: AIConfig,
+  signal: AbortSignal,
+): Promise<AIModel[]> {
+  if (config.provider !== "compatible" && !config.key.trim())
+    throw new Error("請先填入自己的 API Key 再取得模型清單。");
+  const endpoint = modelsEndpointFor(config);
+  const models = new Map<string, AIModel>();
+  const seenTokens = new Set<string>();
+  let pageToken = "";
+  for (let page = 0; page < 10; page++) {
+    const url = new URL(endpoint);
+    if (config.provider === "gemini") {
+      url.searchParams.set("pageSize", "1000");
+      if (pageToken) url.searchParams.set("pageToken", pageToken);
+    }
+    const data = obj(await requestJSON(config, url.href, signal));
+    const entries = config.provider === "gemini" ? data.models : data.data;
+    if (!Array.isArray(entries))
+      throw new Error(
+        "模型清單格式不符；服務可能未提供標準 models API，可改為手動輸入模型 ID。",
+      );
+    for (const entry of entries) {
+      const model = obj(entry);
+      if (
+        config.provider === "gemini" &&
+        !arr(model.supportedGenerationMethods).includes("generateContent")
+      )
+        continue;
+      const id = str(config.provider === "gemini" ? model.name : model.id)
+        .trim()
+        .replace(config.provider === "gemini" ? /^models\// : /$^/, "");
+      if (
+        !id ||
+        id.length > 512 ||
+        (config.key.trim() && id.includes(config.key.trim()))
+      )
+        continue;
+      const name = redactKey(str(model.displayName).slice(0, 200), config.key);
+      models.set(id, {
+        id,
+        label: name && name !== id ? `${name} · ${id}` : id,
+      });
+    }
+    const next = config.provider === "gemini" ? str(data.nextPageToken) : "";
+    if (config.provider !== "gemini" && data.has_more === true)
+      throw new Error(
+        "此相容服務的模型清單需要非標準分頁，請手動輸入模型 ID。",
+      );
+    if (!next) {
+      if (!models.size)
+        throw new Error(
+          "沒有取得可用模型；請確認帳號權限，或手動輸入模型 ID。Gemini 僅列出支援 generateContent 的模型。",
+        );
+      return [...models.values()].sort((a, b) => a.id.localeCompare(b.id));
+    }
+    if (seenTokens.has(next) || page === 9)
+      throw new Error("模型分頁未能完整取得，請稍後重試或手動輸入模型 ID。");
+    seenTokens.add(next);
+    pageToken = next;
+  }
+  return [];
 }
