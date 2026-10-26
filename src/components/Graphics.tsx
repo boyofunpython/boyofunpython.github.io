@@ -19,7 +19,7 @@ export function Graphics({ html }: { html: string }) {
       viewBox?.[3] ?? parseFloat(svg?.getAttribute("height") ?? "500");
     return {
       ratio: width > 0 && height > 0 ? width / height : 1,
-      source: `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:"><style>html,body{margin:0;width:100%;background:white}body{font:14px monospace}svg{display:block;max-width:100%;height:auto;margin:auto}img{max-width:100%;height:auto}</style></head><body>${html}</body></html>`,
+      source: `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:"><style>html,body{margin:0;width:100%;background:white}body{font:14px monospace}body>svg{display:block;width:100%;height:auto;margin:auto}img{max-width:100%;height:auto}</style></head><body>${html}</body></html>`,
     };
   }, [html]);
   return (
