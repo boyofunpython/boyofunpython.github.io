@@ -1,11 +1,10 @@
 {
-  "name": "博幼輕鬆學 Python",
-  "short_name": "博幼輕鬆學 Python",
-  "start_url": "/",
+  "name": "博幼輕鬆學 Python · 程式練習室",
+  "short_name": "Python 練習室",
+  "start_url": "./",
   "display": "standalone",
-  "background_color": "#69caf8",
-  "theme_color": "#444444",
-  "orientation": "portrait-primary",
+  "background_color": "#f5f7fb",
+  "theme_color": "#245bdf",
   "icons": [
     {
       "src": "./images/icons/android-chrome-192x192.png",
@@ -29,5 +28,6 @@
       "type": "image/png",
       "purpose": "maskable"
     }
-  ]
+  ],
+  "scope": "./"
 }
