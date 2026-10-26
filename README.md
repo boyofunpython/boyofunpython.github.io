@@ -18,7 +18,7 @@ npm run build
 npm run preview
 ```
 
-發布目標為 `dist/`，約 16 MB。所有網站路徑使用相對網址，支援網域根目錄或子目錄部署。Hash 路由有 `#/`、`#/console`、`#/examples`、`#/classroom`；舊 `/course/#ide` 網址會轉到本站 Console。本專案不會在建置時自動部署。
+發布目標為 `dist/`，約 16 MB。所有網站路徑使用相對網址，支援網域根目錄或子目錄部署。Hash 路由有 `#/`、`#/console`、`#/examples`、`#/classroom`、`#/assistant`；舊 `/course/#ide` 網址會轉到本站 Console。本專案不會在建置時自動部署。
 
 ## 編輯與繪圖
 
@@ -76,3 +76,9 @@ Playwright 預設使用套件配對的 Chromium，headless 測試 production bui
 版本差異見 [升級紀錄](docs/version-upgrades.md)，第三方授權見 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 工具箱選項與舊版功能對照見 [工具箱相容性](docs/toolbox-compatibility.md)。
+
+## BYOK AI 助教
+
+學生與教師可使用自己的 OpenAI、OpenAI 相容服務或 Gemini API Key，選擇提示、除錯、寫程式、備課與出題。送出前可預覽系統指令與附帶內容；回覆的 Python 可檢查語法、另存或預覽取代，不會自動執行。金鑰與對話只留本分頁記憶體，AI 請求不進離線快取。
+
+環境 system 指令可從介面複製／下載，部署檔為 `ai/python-system.txt`。操作、資料流、限制與官方 API 依據見 [AI 助教設計](docs/ai-assistant.md)。測試使用攔截 API 與假金鑰，不產生模型費用。

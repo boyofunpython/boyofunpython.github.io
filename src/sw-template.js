@@ -31,6 +31,9 @@ self.addEventListener("fetch", (event) => {
     url.pathname.startsWith("/pyodide/v314.0.7/full/");
   if (
     request.method !== "GET" ||
+    request.cache === "no-store" ||
+    request.headers.has("Authorization") ||
+    request.headers.has("x-goog-api-key") ||
     (url.origin !== location.origin && !runtimePackage)
   )
     return;

@@ -1,3 +1,4 @@
+import { PYTHON_LIMITS } from "./python/limits";
 import type {
   AstResult,
   InputRequest,
@@ -110,7 +111,7 @@ function start() {
   });
   initTimer = setTimeout(
     () => resetRuntime("Python 載入逾時，請檢查網路後再試。"),
-    90000,
+    PYTHON_LIMITS.prepareMs,
   );
   worker.postMessage({
     type: "init",
@@ -170,13 +171,13 @@ export async function runPython(
       handlers,
       onRunning,
       started: performance.now(),
-      remaining: 30000,
+      remaining: PYTHON_LIMITS.runMs,
       phaseStart: performance.now(),
       input: null,
       output: "",
       timer: setTimeout(
         () => resetRuntime("Python 套件準備超過 90 秒，請檢查網路後再試。"),
-        90000,
+        PYTHON_LIMITS.prepareMs,
       ),
     };
     worker!.postMessage({

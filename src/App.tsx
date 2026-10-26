@@ -28,6 +28,7 @@ import {
   RotateCcw,
   Search,
   SplitSquareHorizontal,
+  Sparkles,
   Terminal,
   Trash2,
   TriangleAlert,
@@ -44,6 +45,11 @@ import { Dialog } from "./components/Dialog";
 import { ResultsDialog } from "./components/ResultsDialog";
 import { Classroom } from "./components/Classroom";
 import { PythonConsole } from "./components/PythonConsole";
+const AIAssistant = lazy(() =>
+  import("./components/AIAssistant").then((module) => ({
+    default: module.AIAssistant,
+  })),
+);
 import { type EditorMode, type EditorApi } from "./legacy";
 import { examples } from "./examples";
 import {
@@ -61,16 +67,18 @@ import {
   type RunResult,
 } from "./runtime";
 
-type View = "workspace" | "examples" | "classroom" | "console";
+type View = "workspace" | "examples" | "classroom" | "console" | "assistant";
 type Modal = "new" | "rename" | "delete" | "help" | null;
 const viewFromHash = (): View =>
-  location.hash === "#/examples"
-    ? "examples"
-    : location.hash === "#/classroom"
-      ? "classroom"
-      : ["#/console", "#ide", "#/ide"].includes(location.hash)
-        ? "console"
-        : "workspace";
+  location.hash === "#/assistant"
+    ? "assistant"
+    : location.hash === "#/examples"
+      ? "examples"
+      : location.hash === "#/classroom"
+        ? "classroom"
+        : ["#/console", "#ide", "#/ide"].includes(location.hash)
+          ? "console"
+          : "workspace";
 const modes: { id: EditorMode; label: string; icon: typeof Code2 }[] = [
   { id: "split", label: "分割", icon: SplitSquareHorizontal },
   { id: "text", label: "程式碼", icon: Code2 },
@@ -87,6 +95,12 @@ export default function App() {
   const [openedWorkspace, setOpenedWorkspace] = useState(
     () => viewFromHash() === "workspace",
   );
+  const [openedAssistant, setOpenedAssistant] = useState(
+    () => viewFromHash() === "assistant",
+  );
+  useEffect(() => {
+    if (view === "assistant") setOpenedAssistant(true);
+  }, [view]);
   const [mode, setMode] = useState<EditorMode>(() =>
     matchMedia("(max-width: 900px)").matches ? "text" : "split",
   );
@@ -167,7 +181,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [toast]);
   useEffect(() => {
-    document.title = `${view === "workspace" ? "Python 練習室" : view === "examples" ? "靈感範例" : view === "console" ? "Python Console" : "一起學習"} · 博幼輕鬆學 Python`;
+    document.title = `${view === "workspace" ? "Python 練習室" : view === "examples" ? "靈感範例" : view === "console" ? "Python Console" : view === "assistant" ? "AI 助教" : "一起學習"} · 博幼輕鬆學 Python`;
   }, [view]);
   useEffect(() => {
     if (lastView.current === view) return;
@@ -178,7 +192,11 @@ export default function App() {
       if (!main) return;
       main.scrollTop = 0;
       const target =
-        view === "workspace" ? main : main.querySelector<HTMLElement>("h1");
+        view === "workspace"
+          ? main
+          : (Array.from(main.querySelectorAll<HTMLElement>("h1")).find(
+              (heading) => heading.getClientRects().length,
+            ) ?? main);
       target?.setAttribute("tabindex", "-1");
       target?.focus({ preventScroll: true });
     });
@@ -420,7 +438,7 @@ export default function App() {
   const isBusy = runState !== "idle";
   return (
     <div
-      className={`app-shell ${view === "workspace" ? "is-workspace" : view === "console" ? "is-console" : "is-browsing"}`}
+      className={`app-shell ${view === "workspace" ? "is-workspace" : view === "console" || view === "assistant" ? "is-console" : "is-browsing"}`}
     >
       <a
         className="skip-link"
@@ -458,6 +476,12 @@ export default function App() {
                 href: "#/console",
                 label: "Python Console",
                 icon: Terminal,
+              },
+              {
+                id: "assistant",
+                href: "#/assistant",
+                label: "AI 助教",
+                icon: Sparkles,
               },
               {
                 id: "classroom",
@@ -575,10 +599,21 @@ export default function App() {
                   ? "靈感範例"
                   : view === "console"
                     ? "Python Console"
-                    : "一起學習"}
+                    : view === "assistant"
+                      ? "AI 助教"
+                      : "一起學習"}
             </span>
           </div>
           <div className="topbar-actions">
+            <a
+              className="header-link"
+              href="#/assistant"
+              aria-label="AI 助教"
+              title="AI 助教"
+            >
+              <Sparkles size={18} />
+              <span>AI 助教</span>
+            </a>
             <a
               className="header-link"
               href="#/examples"
@@ -617,7 +652,7 @@ export default function App() {
           id="main-content"
           tabIndex={-1}
           className={
-            view === "workspace" || view === "console"
+            view === "workspace" || view === "console" || view === "assistant"
               ? "workspace-main"
               : "content-scroll"
           }
@@ -813,6 +848,42 @@ export default function App() {
             filename={current.name}
             getCode={getCode}
           />
+          {(openedAssistant || view === "assistant") && (
+            <Suspense
+              fallback={view === "assistant" ? <p>正在開啟 AI 助教…</p> : null}
+            >
+              <AIAssistant
+                active={view === "assistant"}
+                getSnapshot={() => ({
+                  id: current.id,
+                  name: current.name,
+                  code: getCode(),
+                })}
+                lastOutput={[result?.text, result?.error]
+                  .filter(Boolean)
+                  .join("\n")}
+                lastOutputFile={runFile}
+                createFile={(code) => {
+                  addFile(code, "ai_example.py");
+                  setToast({
+                    message: "已另存 AI 建議程式，請閱讀後自行執行。",
+                    tone: "success",
+                  });
+                }}
+                applyCode={(snapshot, code) => {
+                  if (
+                    workspaceRef.current?.activeId !== snapshot.id ||
+                    getCode() !== snapshot.code
+                  )
+                    return false;
+                  if (editorRef.current) editorRef.current.setCode(code);
+                  onCodeChange(code);
+                  location.hash = "/";
+                  return true;
+                }}
+              />
+            </Suspense>
+          )}
           {view === "examples" && (
             <section className="examples-view">
               <div className="page-intro">

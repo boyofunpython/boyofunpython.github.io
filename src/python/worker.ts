@@ -1,3 +1,4 @@
+import { PYTHON_LIMITS } from "./limits";
 import { createSvgDocument } from "./svg-document";
 import { CALL_SPECS } from "../editor/catalog-data";
 import type { PyodideInterface } from "pyodide";
@@ -31,7 +32,7 @@ let pendingInput: { id: string; resolve(value: string | null): void } | null =
   null;
 let resultElement: { innerHTML: string };
 function write(chunk: string, stream: string) {
-  if (text.length + chunk.length > 100000)
+  if (text.length + chunk.length > PYTHON_LIMITS.outputChars)
     throw new Error("輸出超過 100,000 字元，請減少列印次數。");
   text += chunk;
   buffered[stream] = (buffered[stream] ?? "") + chunk;

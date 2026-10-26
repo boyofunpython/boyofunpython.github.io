@@ -2468,3 +2468,10 @@ code,
   right: 0;
   z-index: 10;
 }
+
+@media (max-width: 440px) {
+  .topbar-actions > .header-link[href="#/examples"],
+  .topbar-actions > .icon-button {
+    display: none;
+  }
+}

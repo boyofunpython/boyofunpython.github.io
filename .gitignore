@@ -11,3 +11,4 @@ public/versions.json
 public/third-party-licenses.json
 .firecrawl/
 public/manifest.json
+public/ai/python-system.txt

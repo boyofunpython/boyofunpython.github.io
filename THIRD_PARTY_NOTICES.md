@@ -2,22 +2,23 @@
 
 npm 版本由 `package-lock.json` 鎖定。以下為主要直接依賴；各套件的完整授權與轉接依賴資訊以其發行內容為準。
 
-| 元件                      | 授權                 | 來源                                                                              |
-| ------------------------- | -------------------- | --------------------------------------------------------------------------------- |
-| React / React DOM         | MIT                  | https://github.com/facebook/react                                                 |
-| Blockly / multiline input | Apache-2.0           | https://github.com/google/blockly / https://github.com/google/blockly-samples     |
-| CodeMirror 6 / Lezer      | MIT                  | https://github.com/codemirror                                                     |
-| Pyodide                   | MPL-2.0              | https://github.com/pyodide/pyodide                                                |
-| CPython 與標準函式庫      | PSF-2.0 及其內含授權 | https://github.com/python/cpython                                                 |
-| @xmldom/xmldom            | MIT                  | https://github.com/xmldom/xmldom                                                  |
-| PeerJS                    | MIT                  | https://github.com/peers/peerjs                                                   |
-| localForage               | Apache-2.0           | https://github.com/localForage/localForage                                        |
-| Lucide                    | ISC                  | https://github.com/lucide-icons/lucide                                            |
-| DM Sans                   | OFL-1.1              | https://github.com/googlefonts/dm-fonts                                           |
-| Vite                      | MIT                  | https://github.com/vitejs/vite                                                    |
-| TypeScript / Playwright   | Apache-2.0           | https://github.com/microsoft/TypeScript / https://github.com/microsoft/playwright |
-| axe-core                  | MPL-2.0              | https://github.com/dequelabs/axe-core                                             |
-| Prettier                  | MIT                  | https://github.com/prettier/prettier                                              |
+| 元件                        | 授權                 | 來源                                                                                |
+| --------------------------- | -------------------- | ----------------------------------------------------------------------------------- |
+| react-markdown / remark-gfm | MIT                  | https://github.com/remarkjs/react-markdown / https://github.com/remarkjs/remark-gfm |
+| React / React DOM           | MIT                  | https://github.com/facebook/react                                                   |
+| Blockly / multiline input   | Apache-2.0           | https://github.com/google/blockly / https://github.com/google/blockly-samples       |
+| CodeMirror 6 / Lezer        | MIT                  | https://github.com/codemirror                                                       |
+| Pyodide                     | MPL-2.0              | https://github.com/pyodide/pyodide                                                  |
+| CPython 與標準函式庫        | PSF-2.0 及其內含授權 | https://github.com/python/cpython                                                   |
+| @xmldom/xmldom              | MIT                  | https://github.com/xmldom/xmldom                                                    |
+| PeerJS                      | MIT                  | https://github.com/peers/peerjs                                                     |
+| localForage                 | Apache-2.0           | https://github.com/localForage/localForage                                          |
+| Lucide                      | ISC                  | https://github.com/lucide-icons/lucide                                              |
+| DM Sans                     | OFL-1.1              | https://github.com/googlefonts/dm-fonts                                             |
+| Vite                        | MIT                  | https://github.com/vitejs/vite                                                      |
+| TypeScript / Playwright     | Apache-2.0           | https://github.com/microsoft/TypeScript / https://github.com/microsoft/playwright   |
+| axe-core                    | MPL-2.0              | https://github.com/dequelabs/axe-core                                               |
+| Prettier                    | MIT                  | https://github.com/prettier/prettier                                                |
 
 ## SVG turtle
 

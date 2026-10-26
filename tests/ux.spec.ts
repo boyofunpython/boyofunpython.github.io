@@ -3,7 +3,9 @@ import AxeBuilder from "@axe-core/playwright";
 import { writeFile } from "node:fs/promises";
 
 const run = (page: Page) =>
-  page.getByRole("button", { name: "執行程式", exact: false });
+  page
+    .getByRole("banner")
+    .getByRole("button", { name: "執行程式", exact: false });
 const results = (page: Page) =>
   page.getByRole("dialog", { name: "執行結果", exact: true });
 async function ready(page: Page) {

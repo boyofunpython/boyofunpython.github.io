@@ -1,3 +1,4 @@
+import { formatPolicy } from "../src/ai/policy.ts";
 import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 const directory = new URL("../public/vendor/", import.meta.url);
 // These ignored directories contain only this script's generated output.
@@ -88,4 +89,15 @@ for (const [path, entry] of Object.entries(lock.packages)) {
 await writeFile(
   new URL("../public/third-party-licenses.json", import.meta.url),
   JSON.stringify(notices, null, 2) + "\n",
+);
+
+await mkdir(new URL("../public/ai/", import.meta.url), { recursive: true });
+await writeFile(
+  new URL("../public/ai/python-system.txt", import.meta.url),
+  formatPolicy(
+    await readFile(
+      new URL("../src/ai/python-system.txt", import.meta.url),
+      "utf8",
+    ),
+  ),
 );
