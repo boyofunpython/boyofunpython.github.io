@@ -6,6 +6,7 @@ import {
   FileCode2,
   LoaderCircle,
   MessageSquare,
+  Volume2,
   Radio,
   Send,
   Trash2,
@@ -22,6 +23,11 @@ import {
   type SentSubmission,
 } from "../classroom";
 import "./classroom-comms.css";
+import {
+  ClassroomVoiceControls,
+  VoiceMicrophoneStatus,
+  type VoiceProps,
+} from "./ClassroomVoiceControls";
 
 const time = (at: number) =>
   new Date(at).toLocaleTimeString("zh-TW", {
@@ -29,6 +35,7 @@ const time = (at: number) =>
     minute: "2-digit",
   });
 interface Props {
+  voice: VoiceProps;
   enabled: boolean;
   role: ClassroomRole | null;
   connected: number;
@@ -201,7 +208,7 @@ export function ClassroomComms(props: Props) {
     error,
   } = props;
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"messages" | "code">("messages");
+  const [tab, setTab] = useState<"messages" | "code" | "voice">("messages");
   const [text, setText] = useState("");
   const [question, setQuestion] = useState("");
   const [snapshot, setSnapshot] = useState<SentSubmission | null>(null);
@@ -293,6 +300,19 @@ export function ClassroomComms(props: Props) {
             </button>
           </div>
         )}
+        {!open && <VoiceMicrophoneStatus voice={props.voice} />}
+        {!open && props.voice.state.receiving.length > 0 && (
+          <button
+            className="classroom-voice-arrival"
+            onClick={() => {
+              setTab("voice");
+              setOpen(true);
+            }}
+          >
+            <Volume2 size={15} />
+            語音連線 · {props.voice.state.receiving.length} 位
+          </button>
+        )}
         {!open && (
           <button
             ref={button}
@@ -350,6 +370,7 @@ export function ClassroomComms(props: Props) {
               <X size={19} />
             </button>
           </header>
+          {tab !== "voice" && <VoiceMicrophoneStatus voice={props.voice} />}
           <div
             className="classroom-comms-tabs"
             role="group"
@@ -370,6 +391,15 @@ export function ClassroomComms(props: Props) {
             >
               {role === "student" ? "送交程式" : "收到的程式"}
               {codeUnread > 0 && <b>{codeUnread}</b>}
+            </button>
+            <button
+              aria-pressed={tab === "voice"}
+              onClick={() => setTab("voice")}
+            >
+              語音
+              {props.voice.state.receiving.length > 0 && (
+                <b>{props.voice.state.receiving.length}</b>
+              )}
             </button>
           </div>
           {tab === "messages" ? (
@@ -491,6 +521,13 @@ export function ClassroomComms(props: Props) {
                 )}
               </form>
             </>
+          ) : tab === "voice" ? (
+            <ClassroomVoiceControls
+              voice={props.voice}
+              role={role}
+              connected={connected}
+              signalingOpen={props.signalingOpen}
+            />
           ) : (
             <div className="classroom-code-list">
               {role === "student" && (

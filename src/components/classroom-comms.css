@@ -498,3 +498,143 @@
     display: none;
   }
 }
+
+.classroom-voice {
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.classroom-voice-intro > svg {
+  color: #287a63;
+}
+.classroom-voice h3 {
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 8px 0;
+}
+.classroom-voice h4 {
+  font-size: 12px;
+  margin: 0 0 10px;
+}
+.classroom-voice p {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+.classroom-voice button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #cbd7e8;
+  border-radius: 7px;
+  padding: 9px 12px;
+  background: white;
+  font-size: 12px;
+  color: var(--ink);
+}
+.classroom-voice button.primary {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: white;
+}
+.classroom-voice-microphone,
+.classroom-voice-listen {
+  margin-top: 17px;
+  padding-top: 17px;
+  border-top: 1px solid var(--line);
+}
+.classroom-voice-volume {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.classroom-voice-volume input {
+  width: 100%;
+  padding: 0;
+  accent-color: var(--blue);
+}
+.classroom-voice-listen ul {
+  padding: 0;
+  margin: 15px 0 0;
+  list-style: none;
+}
+.classroom-voice-listen li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.classroom-voice-error {
+  background: #fff3e3;
+  border-radius: 8px;
+  padding: 9px 12px;
+  margin-top: 12px;
+}
+.classroom-voice-error p {
+  color: #764019;
+  margin: 0 0 6px;
+}
+.classroom-voice .classroom-voice-note {
+  font-size: 11px;
+  margin: 18px 0 0;
+}
+.classroom-mic-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  background: #fff0ed;
+  color: #943d2b;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.classroom-mic-status.is-muted {
+  background: #f3f5f9;
+  color: #566882;
+}
+.classroom-mic-status > svg {
+  flex-shrink: 0;
+}
+.classroom-mic-status button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 5px 7px;
+  border-radius: 5px;
+  border: 1px solid #d9b5ab;
+  background: white;
+  color: #853822;
+  font-size: 11px;
+}
+.classroom-live .classroom-mic-status {
+  pointer-events: auto;
+  border: 1px solid #e7c6bb;
+  border-radius: 9px;
+  gap: 10px;
+  box-shadow: 0 4px 20px #233f701e;
+}
+.classroom-voice-microphone .classroom-mic-status {
+  border-radius: 7px;
+  margin-bottom: 8px;
+}
+.classroom-voice-arrival {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #255c49;
+  background: #eff8f4;
+  border: 1px solid #a7d5c6;
+  border-radius: 9px;
+  padding: 9px 12px;
+  font-size: 12px;
+}

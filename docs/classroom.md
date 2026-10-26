@@ -15,6 +15,23 @@
 
 分享 URL 保留網站路徑前綴，僅帶 `?peer=教室ID#/classroom`，不複製教師網址上的其他 query 參數。連結是暫時工作階段的邀請：教師關閉分頁或重新建立教室後，應分享新連結。沒有登入驗證、永久教室或課堂資料庫。
 
+## 即時語音
+
+連線後在右下角「教室通訊 → 語音」操作，老師與同學都可以即時開麥：
+
+- 老師按「開啟麥克風廣播」，聲音傳給當下已連線的全部同學；老師開麥期間，晚加入或重新加入的同學也會建立語音連線。
+- 同學按「開啟麥克風傳給老師」，聲音只送給老師。不同同學的聲音不會轉送到其他同學。老師與同學可同時開麥，老師可同時接收多位同學。
+- 收聽端先按「啟用語音收聽」，不需授權或開啟自己的麥克風。可暫停收聽、調音量；瀏覽器阻擋播放時，會顯示「點此播放語音」供手動啟動。
+- 按開麥才呼叫瀏覽器麥克風權限。等待權限時可取消；即使稍後才按允許，已取消或離開教室的請求也不會留下啟用的麥克風。
+- 「暫時靜音麥克風」停送聲音、保留裝置與連線；「關閉麥克風」停止音軌並釋放裝置。收合通訊面板仍有麥克風狀態與關閉按鈕，切到編輯器、範例、AI 或 Console 不會結束語音。離開教室會關閉自己的麥克風及收到的語音。
+- 權限拒絕、裝置拔除、播放阻擋及語音連線逾時各有提示。語音失敗不應關閉既有文字／程式資料連線，可明確重試語音。
+
+語音使用同一個公共 PeerJS peer 的 `call()`／`MediaConnection`，每個方向建立獨立的單向音訊連線，接收端使用 `answer()`，不附自己的音軌。只接受同一教室中已有資料連線對象的指定語音協定；未知來源、其他類型與已取消的呼叫會拒絕。`voice-stop` 控制封包依來源及呼叫 ID 關閉對應語音，避免停止／重開與訊號交換的先後順序留下舊播放器。這不是登入身分驗證。
+
+麥克風需要安全來源（正式站使用 HTTPS；本機開發可用 localhost）。這與 AI 自訂端點允許 HTTP 的設定不同，屬於瀏覽器的媒體權限要求。語音不錄音、不存進本機檔案或對話紀錄。建議使用耳機以減少回音。每位同學各有獨立連線，老師上傳與處理負載會隨人數增加；本次驗證沒有宣稱大型班級的容量或所有校園網路都能連通。
+
+依據：[PeerJS 音訊與單向通話](https://peerjs.com/client/getting-started#videoaudio-calls)、[MediaConnection](https://peerjs.com/client/api/media-connection)、[瀏覽器麥克風權限](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia)、[自動播放限制](https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Autoplay)。
+
 ## 斷線與資料處理
 
 - 訊號服務斷線時停用複製分享按鈕並提示「重新連接服務」；既有 WebRTC 資料連線可繼續使用。重連成功保留原 ID，不會重複建立學生資料通道。
@@ -41,3 +58,12 @@ CLASSROOM_VERIFY_URL=https://boyofunpython.github.io/ npm run test:classroom:pub
 ```
 
 此命令會建立短暫的公共 PeerJS 測試連線、傳送合成程式並在結束時關閉，不接觸使用者的瀏覽器資料或系統剪貼簿。
+
+語音驗收使用 Chromium 的假麥克風裝置與產生的純音 WAV，不使用操作電腦的真實麥克風。PeerJS 與 WebRTC 沒有 mock；檢查雙向 RTP 封包、接收端非零解碼音訊能量及播放器進度，並確認學生音訊沒有送給其他學生、靜音／釋放音軌、晚加入與跨頁面連續收聽。接著仍會執行原有文字、送交程式與私人回覆驗收。
+
+```sh
+npm run test:classroom:voice:public
+CLASSROOM_VERIFY_URL=https://boyofunpython.github.io/ npm run test:classroom:voice:public
+```
+
+報告為 `artifacts/classroom-voice-public-verification.json`。這是隔離 Chromium 環境的傳輸與播放證據；未包含人耳聽感、實際設備回音、Safari／Firefox 或跨校網路的驗證。

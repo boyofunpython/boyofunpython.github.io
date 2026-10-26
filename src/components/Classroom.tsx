@@ -16,6 +16,7 @@ import {
   type SentSubmission,
 } from "../classroom";
 import { ClassroomComms } from "./ClassroomComms";
+import { ClassroomVoice, initialVoiceState } from "../classroom-voice";
 import type { Peer as PeerClient, DataConnection as Connection } from "peerjs";
 
 export function Classroom({
@@ -29,6 +30,8 @@ export function Classroom({
   filename: string;
   receive: (code: string, name: string) => void;
 }) {
+  const [voiceState, setVoiceState] = useState(initialVoiceState);
+  const [voice] = useState(() => new ClassroomVoice(setVoiceState));
   const [role, setRole] = useState<ClassroomRole | null>(null);
   const [id, setId] = useState("");
   const [status, setStatus] = useState("");
@@ -84,6 +87,7 @@ export function Classroom({
   useEffect(
     () => () => {
       session.current++;
+      voice.reset();
       clearTimeout(timeout.current);
       peer.current?.destroy();
     },
@@ -91,6 +95,7 @@ export function Classroom({
   );
   function disconnect() {
     session.current++;
+    voice.reset();
     clearTimeout(timeout.current);
     const client = peer.current;
     peer.current = null;
@@ -136,12 +141,19 @@ export function Classroom({
       if (token !== session.current) return;
       const client = createClassroomPeer();
       peer.current = client;
+      voice.bind(client, nextRole);
+      client.on("call", (call) => {
+        if (token === session.current) voice.receive(call);
+        else call.close();
+      });
       function attach(connection: Connection) {
         if (token !== session.current) {
           connection.close();
           return;
         }
+        voice.add(connection);
         function remove() {
+          voice.remove(connection);
           allConnections.current = allConnections.current.filter(
             (c) => c !== connection,
           );
@@ -157,11 +169,13 @@ export function Classroom({
           if (!allConnections.current.includes(connection))
             allConnections.current.push(connection);
           setConnections([...allConnections.current]);
+          voice.add(connection);
           setError("");
           setStatus("已連線");
         });
         connection.on("data", (raw) => {
           if (token !== session.current) return;
+          if (voice.control(connection, raw)) return;
           const data = readClassroomPacket(raw, nextRole);
           if (!data) return;
           if ("id" in data && data.id) {
@@ -285,6 +299,7 @@ export function Classroom({
         if (token !== session.current) return;
         hasOpened = true;
         signalingReady = true;
+        voice.setSignaling(true);
         setReconnecting(false);
         setId(String(value));
         setSignalingOpen(true);
@@ -316,6 +331,7 @@ export function Classroom({
       client.on("disconnected", () => {
         if (token !== session.current) return;
         signalingReady = false;
+        voice.setSignaling(false);
         setSignalingOpen(false);
         setStatus(
           "公共 PeerJS 服務已斷線；現有連線可繼續使用，重新連接後才能加入新同學。",
@@ -330,9 +346,19 @@ export function Classroom({
         if (token !== session.current) return;
         if (
           hasOpened &&
+          (err?.type === "webrtc" ||
+            (err?.type === "peer-unavailable" && voice.hasPendingCalls())) &&
+          allConnections.current.some((c) => c.open)
+        ) {
+          voice.mediaError();
+          return;
+        }
+        if (
+          hasOpened &&
           ["network", "socket-error", "socket-closed"].includes(err?.type)
         ) {
           signalingReady = false;
+          voice.setSignaling(false);
           setSignalingOpen(false);
           setReconnecting(false);
           setError("公共 PeerJS 服務暫時無法連線，請按重新連接服務。");
@@ -675,6 +701,7 @@ export function Classroom({
         </p>
       </div>
       <ClassroomComms
+        voice={{ controller: voice, state: voiceState }}
         enabled={hadSession || inbox.length > 0}
         role={role}
         connected={connections.length}
