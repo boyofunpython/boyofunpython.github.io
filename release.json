@@ -1,0 +1,8 @@
+{
+  "application": "boyo-python-studio",
+  "version": "2.0.0",
+  "source_commit": "a06cec4c127812141b4173fd48b34b0294e0473b",
+  "legacy_commit": "66ac086bc5f52e291f967571c1deafb2dd17b3b4",
+  "built_at": "2026-10-26T10:25:49.645954+00:00",
+  "artifact_sha256": "bc41c6b492885b44b86170f78f2e6948f3f2becf51a48f6db618799c51c0c181"
+}
