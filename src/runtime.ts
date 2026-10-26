@@ -67,6 +67,7 @@ function start() {
     }
     if (!run || data.id !== run.id) return;
     if (data.type === "running") {
+      clearTimeout(run.timer);
       run.started = performance.now();
       run.onRunning();
       armTimeout();
@@ -173,6 +174,10 @@ export async function runPython(
       phaseStart: performance.now(),
       input: null,
       output: "",
+      timer: setTimeout(
+        () => resetRuntime("Python 套件準備超過 90 秒，請檢查網路後再試。"),
+        90000,
+      ),
     };
     worker!.postMessage({
       type: mode,

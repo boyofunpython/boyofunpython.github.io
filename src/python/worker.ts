@@ -1,4 +1,5 @@
 import { createSvgDocument } from "./svg-document";
+import { CALL_SPECS } from "../editor/catalog-data";
 import type { PyodideInterface } from "pyodide";
 import type { WorkerRequest } from "./protocol";
 
@@ -82,6 +83,7 @@ async function init(base: string, id: number) {
     if (!response.ok) throw new Error("無法載入海龜繪圖程式");
     py.FS.writeFile("/home/pyodide/boyo_turtle/" + file, await response.text());
   }
+  py.globals.set("_studio_block_catalog", JSON.stringify(CALL_SPECS));
   for (const file of ["studio_runtime.py", "ast_blocks.py"]) {
     const response = await fetch(new URL("python/" + file, base));
     if (!response.ok) throw new Error("無法載入 Python 輔助程式");
@@ -126,13 +128,13 @@ scope.onmessage = ({ data }) => {
         lastFlush = 0;
         resultElement.innerHTML = "";
         stdinLines = [...(data.stdinLines ?? [])];
-        scope.postMessage({ type: "running", id: data.id });
         py.globals.set("_studio_filename", data.filename ?? "main.py");
         py.globals.set("_studio_mode", data.type);
         let incomplete = false;
         let error: string | undefined;
         try {
           await py.loadPackagesFromImports(data.code);
+          scope.postMessage({ type: "running", id: data.id });
           const outcome = JSON.parse(
             (await py.runPythonAsync(
               "await _studio_dispatch(_studio_source, _studio_filename, _studio_mode)",

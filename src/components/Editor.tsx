@@ -153,6 +153,9 @@ export function Editor({
       move: { scrollbars: true, drag: true, wheel: true },
     });
     blockView.current = workspace;
+    workspace.registerButtonCallback("BOYO_CREATE_VARIABLE", () =>
+      Blockly.Variables.createVariableButtonHandler(workspace),
+    );
     const api: EditorApi = {
       getCode: () => cm.state.doc.toString(),
       setCode(value) {

@@ -22,6 +22,7 @@ jobs:
       - run: npm run format:check
       - run: npm run build
       - run: npm audit --audit-level=moderate
+      - run: npm run test:toolbox
       - run: npm test
       - uses: actions/upload-artifact@v7.0.2
         if: always()

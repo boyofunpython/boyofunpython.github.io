@@ -2,6 +2,8 @@ import * as Blockly from "blockly/core";
 import "blockly/blocks";
 import { pythonGenerator, Order } from "blockly/python";
 import * as zh from "blockly/msg/zh-hant";
+import "./catalog-blocks";
+import "./structured-blocks";
 import { registerFieldMultilineInput } from "@blockly/field-multilineinput";
 registerFieldMultilineInput();
 
@@ -230,6 +232,12 @@ const value = (block: Blockly.Block, input: string, fallback = "None") =>
 const body = (block: Blockly.Block, input: string) =>
   pythonGenerator.statementToCode(block, input) || "    pass\n";
 pythonGenerator.INDENT = "    ";
+// Preserve embedded newlines even inside indented suites. A physical line
+// continuation in a quoted string would otherwise turn indentation into data.
+pythonGenerator.forBlock["text"] = (block) => [
+  JSON.stringify(String(block.getFieldValue("TEXT"))),
+  Order.ATOMIC,
+];
 pythonGenerator.forBlock["py_name"] = (block) => [
   String(block.getFieldValue("NAME")),
   Order.ATOMIC,
@@ -247,7 +255,7 @@ pythonGenerator.forBlock["py_expression"] = (block) => [
   Order.ATOMIC,
 ];
 pythonGenerator.forBlock["py_binary"] = (block) => [
-  `(${value(block, "LEFT", "0")} ${block.getFieldValue("OP")} ${value(block, "RIGHT", "0")})`,
+  `(${pythonGenerator.valueToCode(block, "LEFT", Order.ATOMIC) || "0"} ${block.getFieldValue("OP")} ${pythonGenerator.valueToCode(block, "RIGHT", Order.ATOMIC) || "0"})`,
   Order.ATOMIC,
 ];
 pythonGenerator.forBlock["py_call"] = (block) => {
@@ -279,70 +287,5 @@ pythonGenerator.forBlock["py_comment"] = (block) =>
   `#${block.getFieldValue("TEXT")}\n`;
 pythonGenerator.forBlock["py_statement"] = (block) =>
   String(block.getFieldValue("CODE")).replace(/\n?$/, "\n");
-const block = (
-  type: string,
-  fields?: Record<string, string>,
-  extraState?: unknown,
-) => ({ kind: "block", type, fields, extraState });
-const category = (name: string, colour: string, contents: unknown[]) => ({
-  kind: "category",
-  name,
-  colour,
-  contents,
-});
-export function toolbox(
-  full: boolean,
-): Blockly.utils.toolbox.ToolboxDefinition {
-  const contents = [
-    category("變數", "#586baa", [block("py_assign"), block("py_name")]),
-    category("資料數值", "#539e84", [
-      block("text"),
-      block("py_number"),
-      block("py_literal"),
-      block("lists_create_with"),
-    ]),
-    category("輸出與輸入", "#4f9e98", [
-      block("py_expr_stmt", undefined, undefined),
-      block("py_call", { FUNC: "print" }, { count: 1 }),
-      block("py_call", { FUNC: "input" }, { count: 1 }),
-    ]),
-    category("數學運算", "#509aaa", [
-      block("py_binary"),
-      block("math_arithmetic"),
-      block("math_round"),
-    ]),
-    category("條件判斷", "#9b6aba", [
-      block("py_if"),
-      block("logic_compare"),
-      block("logic_negate"),
-    ]),
-    category("迴圈", "#539d6e", [
-      block("py_for"),
-      block("py_call", { FUNC: "range" }, { count: 1 }),
-      block("py_while"),
-      block("py_keyword"),
-    ]),
-    category("繪圖 🐢", "#4f9d82", [
-      block("py_statement", { CODE: "import turtle" }),
-      block("py_call", { FUNC: "turtle.forward" }, { count: 1 }),
-      block("py_call", { FUNC: "turtle.right" }, { count: 1 }),
-      block("py_call", { FUNC: "turtle.done" }, { count: 0 }),
-    ]),
-  ];
-  if (full)
-    contents.push(
-      category("Python 與註解", "#8b7a59", [
-        block("py_comment"),
-        block("py_statement"),
-        block("py_expression"),
-        block("py_return"),
-        block("lists_length"),
-        block("text_join"),
-      ]),
-    );
-  return {
-    kind: "categoryToolbox",
-    contents,
-  } as Blockly.utils.toolbox.ToolboxDefinition;
-}
+export { toolbox } from "./toolbox";
 export { Blockly, pythonGenerator };

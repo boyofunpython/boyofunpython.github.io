@@ -193,3 +193,27 @@ for (const withText of [false, true]) {
     );
   });
 }
+
+test("figure output falls back to an image when its optional HTML representation is unavailable", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "程式碼", exact: true }).click();
+  await page.getByRole("textbox", { name: "Python 程式碼", exact: true })
+    .fill(`import base64
+class Figure:
+    def _repr_html_(self):
+        return None
+    def savefig(self, stream, format):
+        stream.write(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"))
+display(Figure())`);
+  await page.getByRole("button", { name: "執行程式", exact: false }).click();
+  const image = page.frameLocator("iframe").locator("img");
+  await expect(image).toBeVisible({ timeout: 90000 });
+  expect(
+    await image.evaluate(
+      (element) => (element as HTMLImageElement).naturalWidth,
+    ),
+  ).toBe(1);
+  await expect(page.locator(".result-error")).toHaveCount(0);
+});

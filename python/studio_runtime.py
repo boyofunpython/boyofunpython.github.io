@@ -10,6 +10,7 @@ import base64
 import rlcompleter
 import sys
 import traceback
+import ast
 from pyodide.code import eval_code_async
 from pyodide.ffi import can_run_sync, run_sync, jsnull
 from boyo import write as _write, request_input as _request_input, document as _document
@@ -58,15 +59,21 @@ def _display_hook(value):
 
 def display(value):
     target = _document.getElementById('result')
-    if hasattr(value, '_repr_svg_'):
-        target.innerHTML += value._repr_svg_()
-    elif hasattr(value, '_repr_html_'):
-        target.innerHTML += value._repr_html_()
-    elif hasattr(value, '_repr_png_'):
-        image = value._repr_png_()
-        encoded = base64.b64encode(image).decode() if isinstance(image, bytes) else image
-        target.innerHTML += f'<img alt="Python 圖形" src="data:image/png;base64,{encoded}">'
-    elif hasattr(value, 'savefig'):
+    for method in ('_repr_svg_', '_repr_html_', '_repr_png_'):
+        if not hasattr(value, method):
+            continue
+        formatted = getattr(value, method)()
+        if formatted is None:
+            continue
+        if isinstance(formatted, tuple):
+            formatted = formatted[0]
+        if method == '_repr_png_':
+            encoded = base64.b64encode(formatted).decode() if isinstance(formatted, bytes) else formatted
+            target.innerHTML += f'<img alt="Python 圖形" src="data:image/png;base64,{encoded}">'
+        else:
+            target.innerHTML += str(formatted)
+        return
+    if hasattr(value, 'savefig'):
         stream = io.BytesIO()
         value.savefig(stream, format='png')
         encoded = base64.b64encode(stream.getvalue()).decode()
@@ -75,6 +82,29 @@ def display(value):
         target.innerHTML += value
     else:
         print(value)
+
+
+def _show_plot(*args, **kwargs):
+    from matplotlib import pyplot as plt
+    for number in plt.get_fignums():
+        display(plt.figure(number))
+    plt.close('all')
+
+
+def _prepare_graphics(source):
+    try:
+        nodes = ast.walk(ast.parse(source))
+        plotting = any(isinstance(node, ast.Import) and any(alias.name.startswith('matplotlib') for alias in node.names)
+                       or isinstance(node, ast.ImportFrom) and (node.module or '').startswith('matplotlib') for node in nodes)
+    except SyntaxError:
+        return
+    if plotting:
+        import matplotlib
+        # Workers have no browser canvas. Render figures using Agg, then pass
+        # their PNG output through the same isolated result display as SVG.
+        matplotlib.use('agg')
+        from matplotlib import pyplot as plt
+        plt.show = _show_plot
 
 
 def _turtle_done(*, automatic=False):
@@ -123,7 +153,7 @@ def loadCSV(path):
     return run_sync(aloadCSV(path))
 
 
-_helpers = {'aloadCSV': aloadCSV, 'display': display, 'boyoDisplay': display, 'loadCSV': loadCSV, 'sqrt': math.sqrt, 'pow': pow}
+_helpers = {'aloadCSV': aloadCSV, 'display': display, 'boyoDisplay': display, 'format_mime': display, 'loadCSV': loadCSV, 'sqrt': math.sqrt, 'pow': pow}
 _namespace.update(_helpers)
 
 
@@ -134,6 +164,7 @@ async def _studio_execute(source, filename, mode):
     sys.displayhook = _display_hook
     builtins.input = studio_input
     _namespace['__file__'] = filename
+    _prepare_graphics(source)
     if mode == 'run':
         _console_buffer.clear()
         _restart()

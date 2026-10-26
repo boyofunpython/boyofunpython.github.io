@@ -517,8 +517,9 @@ class Screen(metaclass=Singleton):
         text = SVG.text(txt, x=x, y=y, fill=fill,
                         style={'display': 'none' if self._animate else 'block',
                                'font-family': font[0],
-                               'font-size': font[1],
-                               'font-style': font[2]})
+                               'font-size': f'{font[1]}px',
+                               'font-style': 'italic' if 'italic' in font[2] else 'normal',
+                               'font-weight': 'bold' if 'bold' in font[2] else 'normal'})
 
         if stroke is not None:
             text.setAttribute('stroke', stroke)

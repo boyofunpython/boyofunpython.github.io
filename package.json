@@ -13,7 +13,8 @@
     "format:check": "prettier --check src scripts tests index.html package.json tsconfig.json vite.config.ts playwright.config.ts README.md THIRD_PARTY_NOTICES.md docs .github/workflows/ci.yml",
     "postinstall": "node scripts/prepare-vendor.mjs",
     "predev": "node scripts/prepare-vendor.mjs",
-    "prebuild": "node scripts/prepare-vendor.mjs"
+    "prebuild": "node scripts/prepare-vendor.mjs",
+    "test:toolbox": "node scripts/check-toolboxes.mjs"
   },
   "dependencies": {
     "@blockly/field-multilineinput": "13.4.0",

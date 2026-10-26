@@ -22,7 +22,7 @@ npm run preview
 
 ## 編輯與繪圖
 
-- 方塊、程式碼與分割三種模式；可切換基礎／完整工具箱。CPython 的 AST 負責解析，切換模式不會執行程式。
+- 方塊、程式碼與分割三種模式；基礎工具箱有 11 個分類，完整工具箱有 20 個分類，兩者都提供 35 種 turtle 操作與範例。CPython 的 AST 負責解析，切換模式不會執行程式。
 - 方塊支援變數、數值、運算、輸出輸入、條件、迴圈與 turtle。進階語法保留為可編輯的 Python 文字方塊；實際修改方塊前保留原始程式格式，修改後依方塊重新產生程式碼。
 - 新增、改名、刪除、匯入與下載 `.py`，自動儲存於本機；首次使用讀取舊 IndexedDB 檔案或 futurecoder 編輯內容，不刪除原資料。
 - 文字輸出以純文字呈現，`display()` 支援 SVG、HTML、PNG 與具 `savefig()` 的圖形物件。turtle 使用維護於本專案的 SVG 原始碼版本。
@@ -54,6 +54,7 @@ Console 與編輯器使用同一個 Python 環境，可直接執行目前檔案�
 npx playwright install chromium
 npm run format:check
 npm run build
+npm run test:toolbox
 npm test
 npm audit --audit-level=moderate
 ```
@@ -73,3 +74,5 @@ Playwright 預設使用套件配對的 Chromium，headless 測試 production bui
 - `scripts/prepare-vendor.mjs`、`scripts/build-static.mjs`、`src/sw-template.js`：可重建的靜態資源與離線快取。
 
 版本差異見 [升級紀錄](docs/version-upgrades.md)，第三方授權見 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+工具箱選項與舊版功能對照見 [工具箱相容性](docs/toolbox-compatibility.md)。

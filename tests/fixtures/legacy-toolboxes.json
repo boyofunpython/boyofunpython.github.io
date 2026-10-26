@@ -1,0 +1,328 @@
+{
+  "commit": "66ac086bc5f52e291f967571c1deafb2dd17b3b4",
+  "path": "blockmirror/block_mirror.js",
+  "normal": [
+    {
+      "name": "變數",
+      "colour": "VARIABLES",
+      "custom": "VARIABLE"
+    },
+    {
+      "name": "資料數值",
+      "colour": "TEXT",
+      "blocks": ["\"\"", "0", "True"]
+    },
+    {
+      "name": "工具",
+      "colour": "TEXT",
+      "blocks": [
+        "input('Your Name?')",
+        "print('Hello World')",
+        "loadCSV('網路位置')",
+        "boyoDisplay(___)",
+        "random.randint(1,100)",
+        "random.choice(['蘋果 apple','水蜜桃 peach'])",
+        "random.sample(range(100),50)",
+        "\"string\".split(\",\")"
+      ]
+    },
+    {
+      "name": "數學運算",
+      "colour": "MATH",
+      "blocks": ["___ + ___", "round(___)", "pow(___,___)", "sqrt(___)"]
+    },
+    {
+      "name": "邏輯判斷",
+      "colour": "LOGIC",
+      "blocks": [
+        "if ___: pass",
+        "if ___: pass\nelse: pass",
+        "___ < ___",
+        "___ and ___",
+        "not ___",
+        "if ___: pass\nelif ___: pass",
+        "if ___: pass\nelif ___: pass\nelse: pass"
+      ]
+    },
+    {
+      "name": "迴圈",
+      "colour": "CONTROL",
+      "blocks": ["for i in range(10): pass", "while A == B: pass", "break"]
+    },
+    {
+      "name": "畫圖🐢",
+      "colour": "PLOTTING",
+      "blocks": [
+        "turtle.done()",
+        "turtle.speed(10)",
+        "turtle.set_defaults(canvwidth=500,canvheight=500)",
+        "turtle.forward(50)",
+        "turtle.backward(50)",
+        "turtle.right(90)",
+        "turtle.left(90)",
+        "turtle.setheading(270)",
+        "turtle.goto(0, 0)",
+        "turtle.setx(100)",
+        "turtle.sety(100)",
+        "turtle.pendown()",
+        "turtle.penup()",
+        "turtle.pensize(5)",
+        "turtle.pencolor('blue')",
+        "turtle.fillcolor('blue')",
+        "turtle.bgcolor('blue')",
+        "turtle.begin_fill()",
+        "turtle.end_fill()",
+        "turtle.write('Hello World')",
+        "turtle.position()",
+        "turtle.circle(50)",
+        "turtle.stamp()",
+        "turtle.write('你想說什麼呢？', font=('標楷體', 24, 'bold'), color='blue', align='center')"
+      ]
+    },
+    {
+      "name": "函式",
+      "colour": "FUNCTIONS",
+      "blocks": [
+        "def ___(___): pass",
+        "def ___(___: int)->str: pass",
+        "return ___",
+        "(___)(___)"
+      ]
+    },
+    {
+      "name": "資料轉換",
+      "colour": "TEXT",
+      "blocks": ["int(___)", "float(___)", "str(___)", "bool(___)"]
+    },
+    {
+      "name": "資料串(List)",
+      "colour": "LIST",
+      "blocks": [
+        "[0, 0, 0]",
+        "[___, ___, ___]",
+        "[]",
+        "___.append(___)",
+        "range(0, 10)"
+      ]
+    },
+    {
+      "name": "字典資料",
+      "colour": "DICTIONARY",
+      "blocks": [
+        "{'1st key': ___, '2nd key': ___, '3rd key': ___}",
+        "{}",
+        "___['key']"
+      ]
+    }
+  ],
+  "full": [
+    {
+      "name": "變數",
+      "colour": "VARIABLES",
+      "custom": "VARIABLE"
+    },
+    {
+      "name": "資料值",
+      "colour": "LIST",
+      "blocks": [
+        "0",
+        "''",
+        "True",
+        "None",
+        "[___, ___, ___]",
+        "(___, ___, ___)",
+        "{___, ___, ___}",
+        "{___: ___, ___: ___, ___: ___}"
+      ]
+    },
+    {
+      "name": "數學計算",
+      "colour": "MATH",
+      "blocks": ["-___", "___ + ___", "___ >> ___", "abs(___)", "round(___)"]
+    },
+    {
+      "name": "邏輯判斷",
+      "colour": "LOGIC",
+      "blocks": [
+        "___ if ___ else ___",
+        "___ == ___",
+        "___ < ___",
+        "___ in ___",
+        "___ and ___",
+        "not ___"
+      ]
+    },
+    {
+      "name": "物件",
+      "colour": "OO",
+      "blocks": [
+        "class ___: pass",
+        "class ___(___): pass",
+        "___.___",
+        "___: ___",
+        "super()"
+      ]
+    },
+    {
+      "name": "函式",
+      "colour": "FUNCTIONS",
+      "blocks": [
+        "def ___(___): pass",
+        "def ___(___: int)->str: pass",
+        "return ___",
+        "yield ___",
+        "lambda ___: ___"
+      ]
+    },
+    {
+      "name": "輸入函式庫",
+      "colour": "PYTHON",
+      "blocks": [
+        "import ___",
+        "from ___ import ___",
+        "import ___ as ___",
+        "from ___ import ___ as ___"
+      ]
+    },
+    {
+      "name": "流程控制",
+      "colour": "CONTROL",
+      "blocks": [
+        "if ___: pass",
+        "if ___: pass\nelse: pass",
+        "for ___ in ___: pass",
+        "while ___: pass",
+        "break",
+        "continue",
+        "try: pass\nexcept ___ as ___: pass",
+        "raise ___",
+        "assert ___",
+        "with ___ as ___: pass"
+      ]
+    },
+    {
+      "name": "圖表",
+      "colour": "PLOTTING",
+      "blocks": [
+        "plt.plot(___)",
+        "plt.scatter(___, ___)",
+        "plt.hist(___)",
+        "plt.bar(___, ___, tick_label=___)",
+        "plt.boxplot(___)",
+        "format_mime(plt)",
+        "plt.title(___)",
+        "plt.xlabel(___)",
+        "plt.ylabel(___)",
+        "plt.hlines(___, ___, ___)",
+        "plt.vlines(___, ___, ___)"
+      ]
+    },
+    {
+      "name": "工具",
+      "colour": "TEXT",
+      "blocks": [
+        "input('Your Name?')",
+        "print('Hello World')",
+        "loadCSV('網路位置')",
+        "boyoDisplay(___)",
+        "random.randint(1,100)",
+        "random.choice(['蘋果 apple','水蜜桃 peach'])",
+        "random.sample(range(100),50)",
+        "\"string\".split(\",\")"
+      ]
+    },
+    {
+      "name": "檔案",
+      "colour": "FILE",
+      "blocks": [
+        "with open('', 'r') as ___: pass",
+        "___.read()",
+        "___.readlines()",
+        "___.write(___)",
+        "___.writelines(___)"
+      ]
+    },
+    {
+      "name": "資料轉換",
+      "colour": "TEXT",
+      "blocks": [
+        "int(___)",
+        "float(___)",
+        "str(___)",
+        "chr(___)",
+        "bool(___)",
+        "list(___)",
+        "dict(___)",
+        "tuple(___)",
+        "set(___)",
+        "type(___)",
+        "isinstance(___)"
+      ]
+    },
+    {
+      "name": "內建函式",
+      "colour": "SEQUENCES",
+      "blocks": [
+        "len(___)",
+        "sorted(___)",
+        "enumerate(___)",
+        "reversed(___)",
+        "range(0, 10)",
+        "min(___, ___)",
+        "max(___, ___)",
+        "sum(___)",
+        "all(___)",
+        "any(___)",
+        "zip(___, ___)",
+        "map(___, ___)",
+        "filter(___, ___)"
+      ]
+    },
+    {
+      "name": "資料串資料操作",
+      "colour": "LIST",
+      "blocks": ["___.append(___)", "___.pop()", "___.clear()"]
+    },
+    {
+      "name": "字串資料操作",
+      "colour": "TEXT",
+      "blocks": [
+        "___.startswith('')",
+        "___.endswith('')",
+        "___.replace('', '')",
+        "___.lower('')",
+        "___.upper('')",
+        "___.title('')",
+        "___.strip('')",
+        "___.split('')",
+        "''.join(___)",
+        "___.format('')",
+        "___.strip('')"
+      ]
+    },
+    {
+      "name": "資料串切片操作",
+      "colour": "SEQUENCES",
+      "blocks": ["___[___]", "___[___:___]", "___[___:___:___]"]
+    },
+    {
+      "name": "資料產生器",
+      "colour": "SEQUENCES",
+      "blocks": [
+        "[___ for ___ in ___]",
+        "(___ for ___ in ___)",
+        "{___ for ___ in ___}",
+        "{___: ___ for ___ in ___ if ___}",
+        "[___ for ___ in ___ if ___]",
+        "(___ for ___ in ___ if ___)",
+        "{___ for ___ in ___ if ___}",
+        "{___: ___ for ___ in ___ if ___}"
+      ]
+    },
+    {
+      "name": "註解",
+      "colour": "PYTHON",
+      "blocks": ["# ", "\"\"\"\n\"\"\""]
+    }
+  ]
+}
