@@ -10,6 +10,7 @@ import {
   readReply,
   listModels,
   modelsEndpointFor,
+  compatibleBaseURL,
   MODEL_TIMEOUT,
   type AIConfig,
   type Provider,
@@ -21,7 +22,7 @@ const config: AIConfig = {
   provider: "openai",
   key: FAKE_KEY,
   model: "mock-model",
-  endpoint: "",
+  baseURL: "",
   tokenLimit: 2048,
   chatTokenField: "max_tokens",
 };
@@ -39,19 +40,21 @@ const openaiReply = (text = pythonAnswer) => ({
 
 test("model discovery preserves gateway paths, handles Gemini pages, and rejects invalid results", async () => {
   for (const endpoint of [
-    "http://192.168.1.20:11434/v1/chat/completions",
-    "http://llm.local:8000/api/v1/chat/completions/",
-    "http://10.0.0.5/v1/chat/completions",
-    "http://[fd00::1234]:8000/v1/chat/completions",
+    "http://192.168.1.20:11434/v1",
+    "http://llm.local:8000/api/v1/",
+    "http://10.0.0.5/v1",
+    "http://[fd00::1234]:8000/v1",
   ]) {
-    expect(endpointFor({ ...config, provider: "compatible", endpoint })).toBe(
-      new URL(endpoint).href,
-    );
     expect(
-      modelsEndpointFor({ ...config, provider: "compatible", endpoint }),
-    ).toBe(
-      new URL(endpoint).href.replace(/\/chat\/completions\/?$/, "/models"),
-    );
+      endpointFor({ ...config, provider: "compatible", baseURL: endpoint }),
+    ).toBe(new URL(endpoint).href.replace(/\/+$/, "") + "/chat/completions");
+    expect(
+      modelsEndpointFor({
+        ...config,
+        provider: "compatible",
+        baseURL: endpoint,
+      }),
+    ).toBe(new URL(endpoint).href.replace(/\/+$/, "") + "/models");
   }
   expect(modelsEndpointFor(config)).toBe("https://api.openai.com/v1/models");
   const original = globalThis.fetch;
@@ -130,6 +133,86 @@ test("model discovery preserves gateway paths, handles Gemini pages, and rejects
     ).rejects.toThrow(/API Key/);
   } finally {
     globalThis.fetch = original;
+  }
+});
+
+test("compatible clients join resource paths to the documented base URL for both API modes", () => {
+  for (const baseURL of [
+    "http://localhost:11434/v1",
+    "http://localhost:1234/v1/",
+    "http://192.168.1.20:8000/v1",
+    "https://gateway.example/api/v1",
+    "https://gateway.example/tenant/python/v1/",
+    "https://provider.example/",
+  ]) {
+    const base = baseURL.replace(/\/+$/, "") + "/";
+    for (const api of ["chat-completions", "responses"] as const) {
+      const settings: AIConfig = {
+        ...config,
+        provider: "compatible",
+        baseURL,
+        api,
+      };
+      expect(compatibleBaseURL(settings)).toBe(base);
+      expect(modelsEndpointFor(settings)).toBe(base + "models");
+      const request = prepareRequest(settings, "runtime rules", [
+        { role: "user", content: "help" },
+      ]);
+      expect(request.endpoint).toBe(
+        base + (api === "responses" ? "responses" : "chat/completions"),
+      );
+      expect(request.body).toMatchObject({
+        model: "mock-model",
+        stream: false,
+      });
+      if (api === "responses") {
+        expect(request.body).toMatchObject({
+          instructions: "runtime rules",
+          input: [{ role: "user", content: "help" }],
+          max_output_tokens: 2048,
+          store: false,
+        });
+        expect(request.body).not.toHaveProperty("messages");
+        expect(request.body).not.toHaveProperty("max_tokens");
+        expect(readReply("compatible", openaiReply(), api).text).toBe(
+          pythonAnswer,
+        );
+        expect(
+          readReply(
+            "compatible",
+            { ...openaiReply(), status: "cancelled" },
+            api,
+          ).incomplete,
+        ).toBe(true);
+      } else {
+        expect(request.body).toMatchObject({
+          messages: [
+            { role: "system", content: "runtime rules" },
+            { role: "user", content: "help" },
+          ],
+          max_tokens: 2048,
+        });
+        expect(request.body).not.toHaveProperty("input");
+      }
+    }
+  }
+  // These are valid provider base paths, not resource URLs to strip heuristically.
+  for (const suffix of ["models", "responses", "chat/completions"]) {
+    const settings: AIConfig = {
+      ...config,
+      provider: "compatible",
+      baseURL: `http://localhost:1234/tenant/${suffix}/`,
+      api: "responses",
+    };
+    expect(compatibleBaseURL(settings)).toBe(
+      `http://localhost:1234/tenant/${suffix}/`,
+    );
+    expect(modelsEndpointFor(settings)).toBe(
+      `http://localhost:1234/tenant/${suffix}/models`,
+    );
+    expect(endpointFor(settings)).toBe(
+      `http://localhost:1234/tenant/${suffix}/responses`,
+    );
   }
 });
 
@@ -264,89 +347,142 @@ test("Gemini UI lists paginated generateContent models without choosing a model 
   );
 });
 
-test("a real local HTTP provider lists models and accepts chat without an API key", async ({
-  page,
-}) => {
-  const requests: { method: string; url: string; authorization?: string }[] =
-    [];
-  const server = createServer((req, res) => {
-    res.setHeader("Access-Control-Allow-Origin", "http://127.0.0.1:4187");
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "Content-Type, Authorization",
-    );
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    if (req.method === "OPTIONS") {
-      res.writeHead(204).end();
-      return;
-    }
-    requests.push({
-      method: req.method!,
-      url: req.url!,
-      authorization: req.headers.authorization,
-    });
-    res.setHeader("Content-Type", "application/json");
-    res.end(
-      JSON.stringify(
-        req.method === "GET"
-          ? { data: [{ id: "local-python-model" }] }
-          : {
-              choices: [
-                {
-                  message: { content: "本機 HTTP 模型已回覆。" },
-                  finish_reason: "stop",
+for (const api of ["chat-completions", "responses"] as const) {
+  test(`a real local HTTP provider uses a base URL and the ${api} resource`, async ({
+    page,
+  }) => {
+    const resource = api === "responses" ? "responses" : "chat/completions";
+    const requests: { method: string; url: string; authorization?: string }[] =
+      [];
+    const bodies: Record<string, unknown>[] = [];
+    const server = createServer((req, res) => {
+      res.setHeader("Access-Control-Allow-Origin", "http://127.0.0.1:4187");
+      res.setHeader(
+        "Access-Control-Allow-Headers",
+        "Content-Type, Authorization",
+      );
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      if (req.method === "OPTIONS") {
+        res.writeHead(204).end();
+        return;
+      }
+      requests.push({
+        method: req.method!,
+        url: req.url!,
+        authorization: req.headers.authorization,
+      });
+      res.setHeader("Content-Type", "application/json");
+      if (req.method === "GET" && req.url === "/gateway/v1/models") {
+        res.end(JSON.stringify({ data: [{ id: "local-python-model" }] }));
+        return;
+      }
+      if (req.method !== "POST" || req.url !== `/gateway/v1/${resource}`) {
+        res
+          .writeHead(404)
+          .end(JSON.stringify({ error: "wrong resource path" }));
+        return;
+      }
+      let raw = "";
+      req.on("data", (chunk) => (raw += chunk));
+      req.on("end", () => {
+        const body = JSON.parse(raw);
+        bodies.push(body);
+        const valid =
+          api === "responses"
+            ? Array.isArray(body.input) &&
+              !body.messages &&
+              typeof body.instructions === "string" &&
+              body.max_output_tokens === 2048
+            : Array.isArray(body.messages) &&
+              !body.input &&
+              body.max_tokens === 2048;
+        if (!valid || body.stream !== false) {
+          res
+            .writeHead(400)
+            .end(JSON.stringify({ error: "wrong request schema" }));
+          return;
+        }
+        res.end(
+          JSON.stringify(
+            api === "responses"
+              ? openaiReply("本機 HTTP 模型已回覆。")
+              : {
+                  choices: [
+                    {
+                      message: { content: "本機 HTTP 模型已回覆。" },
+                      finish_reason: "stop",
+                    },
+                  ],
                 },
-              ],
-            },
-      ),
-    );
+          ),
+        );
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string")
+        throw Error("missing server port");
+      await start(page);
+      await page
+        .getByRole("button", { name: "設定自己的 API Key", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog", { name: "AI 連線設定" });
+      await dialog
+        .getByRole("combobox", { name: "AI 服務", exact: true })
+        .selectOption("compatible");
+      await dialog
+        .getByLabel("API Base URL", { exact: false })
+        .fill(`http://127.0.0.1:${address.port}/gateway/v1/`);
+      await dialog
+        .getByRole("combobox", { name: "API 模式", exact: true })
+        .selectOption(api);
+      await expect(
+        dialog.getByRole("combobox", { name: "上限參數", exact: true }),
+      ).toHaveCount(api === "responses" ? 0 : 1);
+      await dialog
+        .getByRole("combobox", { name: "服務位置", exact: true })
+        .selectOption("loopback");
+      await dialog
+        .getByRole("button", { name: "取得模型清單", exact: true })
+        .click();
+      await dialog
+        .getByRole("combobox", { name: "選擇供應商模型" })
+        .selectOption("local-python-model");
+      await dialog
+        .getByRole("button", { name: "完成設定", exact: true })
+        .click();
+      await question(page).fill("本機測試");
+      await page
+        .getByRole("button", { name: "預覽送出內容", exact: true })
+        .click();
+      const preview = page.getByRole("dialog", { name: "預覽實際送出內容" });
+      await expect(preview).toContainText(`/gateway/v1/${resource}`);
+      await preview
+        .getByRole("button", { name: "關閉視窗", exact: true })
+        .click();
+      await send(page);
+      await expect(page.locator(".ai-answer")).toContainText(
+        "本機 HTTP 模型已回覆。",
+      );
+      expect(requests).toEqual([
+        { method: "GET", url: "/gateway/v1/models", authorization: undefined },
+        {
+          method: "POST",
+          url: `/gateway/v1/${resource}`,
+          authorization: undefined,
+        },
+      ]);
+      expect(bodies).toHaveLength(1);
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve, reject) =>
+        server.close((e) => (e ? reject(e) : resolve())),
+      );
+    }
   });
-  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
-  try {
-    const address = server.address();
-    if (!address || typeof address === "string")
-      throw Error("missing server port");
-    await start(page);
-    await page
-      .getByRole("button", { name: "設定自己的 API Key", exact: true })
-      .click();
-    const dialog = page.getByRole("dialog", { name: "AI 連線設定" });
-    await dialog
-      .getByRole("combobox", { name: "AI 服務", exact: true })
-      .selectOption("compatible");
-    await dialog
-      .getByLabel("完整 API 網址", { exact: false })
-      .fill(`http://127.0.0.1:${address.port}/gateway/v1/chat/completions`);
-    await dialog
-      .getByRole("combobox", { name: "服務位置", exact: true })
-      .selectOption("loopback");
-    await dialog
-      .getByRole("button", { name: "取得模型清單", exact: true })
-      .click();
-    await dialog
-      .getByRole("combobox", { name: "選擇供應商模型" })
-      .selectOption("local-python-model");
-    await dialog.getByRole("button", { name: "完成設定", exact: true }).click();
-    await question(page).fill("本機測試");
-    await send(page);
-    await expect(page.locator(".ai-answer")).toContainText(
-      "本機 HTTP 模型已回覆。",
-    );
-    expect(requests).toEqual([
-      { method: "GET", url: "/gateway/v1/models", authorization: undefined },
-      {
-        method: "POST",
-        url: "/gateway/v1/chat/completions",
-        authorization: undefined,
-      },
-    ]);
-  } finally {
-    server.closeAllConnections();
-    await new Promise<void>((resolve, reject) =>
-      server.close((e) => (e ? reject(e) : resolve())),
-    );
-  }
-});
+}
+
 async function start(page: Page) {
   await page.addInitScript(
     ({ source }) => {
@@ -382,8 +518,8 @@ async function settings(page: Page, provider: Provider = "openai") {
     .selectOption(provider);
   if (provider === "compatible")
     await dialog
-      .getByLabel("完整 API 網址", { exact: false })
-      .fill("https://ai.example.test/v1/chat/completions");
+      .getByLabel("API Base URL", { exact: false })
+      .fill("https://ai.example.test/v1");
   await dialog.getByLabel("模型 ID", { exact: true }).fill("mock-model");
   await dialog.getByLabel("API Key", { exact: false }).fill(FAKE_KEY);
   await dialog.getByRole("button", { name: "完成設定", exact: true }).click();
@@ -418,7 +554,7 @@ test("API contracts, endpoint restrictions, response parsing and portable policy
     {
       ...config,
       provider: "compatible",
-      endpoint: "https://ai.example.test/v1/chat/completions",
+      baseURL: "https://ai.example.test/v1",
       chatTokenField: "max_completion_tokens",
     },
     "rules",
@@ -480,13 +616,13 @@ test("API contracts, endpoint restrictions, response parsing and portable policy
     "javascript:alert(1)",
   ])
     expect(() =>
-      endpointFor({ ...config, provider: "compatible", endpoint }),
+      endpointFor({ ...config, provider: "compatible", baseURL: endpoint }),
     ).toThrow();
   expect(
     endpointFor({
       ...config,
       provider: "compatible",
-      endpoint: "http://127.0.0.1:11434/v1/chat/completions",
+      baseURL: "http://127.0.0.1:11434/v1",
     }),
   ).toContain("127.0.0.1");
   const template = await readFile("src/ai/python-system.txt", "utf8");
@@ -742,8 +878,8 @@ test("limits refuse requests, timeout/cancel is explicit, key clears on provider
   await expect(dialog.getByLabel("API Key", { exact: false })).toHaveValue("");
   await dialog.getByLabel("API Key", { exact: false }).fill(FAKE_KEY);
   await dialog
-    .getByLabel("完整 API 網址", { exact: false })
-    .fill("https://different.example/v1/chat/completions");
+    .getByLabel("API Base URL", { exact: false })
+    .fill("https://different.example/v1");
   await expect(dialog.getByLabel("API Key", { exact: false })).toHaveValue("");
 });
 

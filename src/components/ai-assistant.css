@@ -625,3 +625,7 @@
   overflow-wrap: anywhere;
   font-family: monospace;
 }
+
+.ai-model-endpoint {
+  white-space: pre-wrap;
+}

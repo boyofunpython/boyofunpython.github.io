@@ -5,7 +5,7 @@
 ## 開始使用
 
 1. 開啟「設定自己的 API Key」，選 OpenAI、OpenAI 相容服務或 Gemini。
-2. 填入自己的金鑰，再按「取得模型清單」並選擇模型，也可直接手動填模型 ID。相容服務需填完整 Chat Completions 網址，如 `http://192.168.1.20:11434/v1/chat/completions`；支援任意 HTTP／HTTPS 主機、連接埠與路徑前綴，免驗證服務可不填金鑰。網址變動或切換服務會清除金鑰。
+2. 填入自己的金鑰，再按「取得模型清單」並選擇模型，也可直接手動填模型 ID。相容服務填 **API Base URL**，如 `http://192.168.1.20:11434/v1`，再選供應商支援的 Chat Completions 或 Responses API；支援任意 HTTP／HTTPS 主機、連接埠與路徑前綴，免驗證服務可不填金鑰。網址變動或切換服務會清除金鑰。
 3. 選擇學習程度與任務。決定是否附上目前程式、最近主編輯器執行的文字／錯誤；預設附程式，不附執行紀錄。
 4. 輸入問題，按「預覽送出內容」檢查實際 API 內容，再按「送出」。只有送出才會產生回答；「取得模型清單」只呼叫供應商的模型資料 GET API，不附帶程式或對話。其他設定、範例問題與預覽都不會呼叫 API。
 5. AI 完整 Python 圍欄可複製、只檢查語法、另存新檔，或比較原程式後確認取代。沒有自動執行。如果詢問後原檔已修改或切換，停用取代，仍可另存。
@@ -72,16 +72,29 @@ for row in rows:
 ## 協定與官方依據（2026-10-26）
 
 - OpenAI：`POST /v1/responses`，`instructions`、多回合 `input`、`max_output_tokens`、`store:false`。依序讀取 `output[].content[]` 的 `output_text`／拒絕文字，沒有假設第一個 output 必為可見文字。[文字生成](https://developers.openai.com/api/docs/guides/text)、[資料控制](https://developers.openai.com/api/docs/guides/your-data)。
-- OpenAI 相容：`POST` 自訂完整 Chat Completions 端點，system/user/assistant messages、可選 token 上限參數，讀 `choices[0].message.content`。相容程度及 CORS 由服務提供者負責。[OpenAI Chat API](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)。
+- OpenAI 相容：以供應商 Base URL 加上資源路徑。Chat Completions 送 system/user/assistant messages、可選 token 上限參數，讀 `choices[0].message.content`；Responses 送 instructions/input/max_output_tokens，依序讀 output 中的文字。兩者明確設定 `stream:false`，協定由使用者選擇，不會自動切換並重複生成。相容程度及 CORS 由服務提供者負責。[OpenAI Chat API](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)。
 - Gemini：採用仍提供的 `models.generateContent`，不是 Interactions；`systemInstruction`、user/model contents、`generationConfig.maxOutputTokens`、`store:false`。讀第一候選的非 thought text 與 usageMetadata。[GenerateContent 參考](https://ai.google.dev/api/generate-content)、[金鑰與來源限制](https://ai.google.dev/gemini-api/docs/api-key)。
 
 測試使用假的金鑰與攔截的 API 回覆，不發出付費 AI 請求。供應商帳號權限、付費模型及個別相容服務的實際 CORS 仍須使用者以自己的帳號驗證。
 
 ## 模型探索與內網 HTTP（2026-10-26）
 
-- OpenAI 使用 `GET https://api.openai.com/v1/models`，相容服務將完整端點的 `/chat/completions`（可含尾端斜線）替換為 `/models`，保留主機、連接埠及路徑前綴，例如 `/gateway/v1/chat/completions` 對應 `/gateway/v1/models`。[OpenAI 官方模型 API](https://developers.openai.com/api/reference/resources/models/methods/list)。不猜測模型家族、不自動挑選第一個模型；清單只代表供應商列出的模型，不保證可用於目前文字 API。
+- OpenAI 使用 `GET https://api.openai.com/v1/models`，相容服務以 **Base URL** 為共同根目錄，分別附加 `models`、`chat/completions` 或 `responses`；保留主機、連接埠與路徑前綴，不丟掉或重複加 `/v1`。例如 Base URL `http://localhost:1234/gateway/v1` 對應 `/gateway/v1/models`、`/gateway/v1/chat/completions`、`/gateway/v1/responses`。[OpenAI 官方模型 API](https://developers.openai.com/api/reference/resources/models/methods/list)。不猜測模型家族、不自動挑選第一個模型；清單只代表供應商列出的模型，不保證可用於目前文字 API。
 - Gemini 使用 `GET https://generativelanguage.googleapis.com/v1beta/models`，依 `nextPageToken` 完成分頁，僅保留 `supportedGenerationMethods` 含 `generateContent` 的模型；移除 ID 的 `models/` 前綴供選擇。[Gemini 官方模型 API](https://ai.google.dev/api/models)。
 - 每次取得最多等待 20 秒、每頁回覆上限 1 MB、最多 10 頁。去除重複 ID；失敗、空清單、格式不符或無法完整分頁時顯示錯誤並保留手動輸入。按鈕可停止；切換服務、端點、金鑰、服務位置或關閉設定會取消並清空清單，舊回覆不會覆蓋新設定。模型 ID 不因載入清單而自動改變。
 - GET 只傳 API Key 標頭及分頁參數，不送程式／問題／對話；不帶 cookies、referrer、不跟隨轉址、不自動重試、`cache:no-store`，也不寫入網站儲存。相容服務沒有金鑰時不送 Authorization，也不增加不必要的 Content-Type 標頭。
 - 「服務位置」預設由瀏覽器判斷；內網自訂 DNS 可選區域網路，本機可選本機服務，分別向支援的瀏覽器傳 `targetAddressSpace: local / loopback`。這不會繞過權限或 CORS；從 GitHub Pages 連到 HTTP 服務時可能出現區域網路／本機權限提示，其他瀏覽器仍可能阻擋混合內容。[Chrome 區域網路存取說明](https://developer.chrome.com/blog/local-network-access)。使用者需允許所選服務的連線，並由服務端開放本站來源的 CORS。
 - 自動測試除了攔截的官方模型回應，也啟動自己的 HTTP 測試服務，實際完成 models GET、CORS 與 Chat Completions POST；不連到使用者的真實內網設備或付費模型。
+
+## Base URL 與 API 模式的官方用法
+
+相容服務設定依照 [Ollama 官方 OpenAI compatibility](https://docs.ollama.com/api/openai-compatibility) 及 [LM Studio 官方 OpenAI Compatibility Endpoints](https://lmstudio.ai/docs/developer/openai-compat)。範例 Base URL 為 `http://localhost:11434/v1/`（Ollama）與 `http://localhost:1234/v1`（LM Studio）；前綴若由服務商指定為 `/api/v1` 或其他路徑，完整保留，不自行猜測版本路徑。只有主機的 Base URL 也照填入值附加資源，不自動補 `/v1`。
+
+- Base URL 可有或沒有尾端 `/`；介面顯示正規化後的 Base URL 及實際 POST 路徑。
+- Base URL 的路徑完整保留，只統一尾端斜線；不猜測或刪除名為 `models`、`responses` 的前綴。請依供應商文件填 Base URL，不沿用舊介面要求的完整 `/chat/completions` 網址。協定明確選擇，介面顯示實際 POST 網址供確認。
+- Chat Completions 使用 `messages`，上限參數可選 `max_tokens` 或 `max_completion_tokens`。OpenAI 官方已將 `max_tokens` 標為棄用，但部分相容服務仍只支援該欄位，依供應商文件選擇；不在錯誤後自動改參數重試。[OpenAI 官方參數](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)。
+- Responses 使用 `instructions`、`input`、`max_output_tokens`、`store:false`；不帶 Chat Completions 的 `messages`／token 欄位，不使用伺服器 conversation 或 previous_response_id。官方 OpenAI 預設此模式；相容服務必須明確選擇。[OpenAI 文字生成](https://developers.openai.com/api/docs/guides/text)、[LM Studio Responses](https://lmstudio.ai/docs/developer/openai-compat/responses)。回覆只有 `status:completed` 才允許套用程式；中斷、取消或未完成皆保留文字並停用套用。
+- `/models` 與生成協定無關，直接由同一 Base URL 組合。LM Studio 可列出下載但尚未載入的模型，清單不等於保證可生成；仍須依所選模型及供應商的能力決定。[LM Studio 模型 API](https://lmstudio.ai/docs/developer/openai-compat/models)。
+- HTTP 測試服務會對未知路徑回 404、錯誤 request schema 回 400，分別測試兩種協定；測試不會僅憑收到任意 POST 就回傳成功。
+
+驗證時另以 npm 最新官方 `openai` SDK 7.43.0，對六種 Base URL（含尾端斜線、閘道前綴及名為 models/responses 的路徑）比對兩種生成 API，十二組請求的路徑及 JSON 均與本站一致。SDK 僅安裝於忽略的驗證目錄，未加入產品依賴；所有請求皆送至自己的 HTTP 測試服務，沒有付費 AI 呼叫。

@@ -1,8 +1,10 @@
 export type Provider = "openai" | "compatible" | "gemini";
+export type CompatibleAPI = "chat-completions" | "responses";
 export interface AIConfig {
   provider: Provider;
   network?: "local" | "loopback";
-  endpoint: string;
+  baseURL: string;
+  api?: CompatibleAPI;
   model: string;
   key: string;
   tokenLimit: number;
@@ -24,16 +26,16 @@ export const MAX_QUESTION = 4000;
 export const MAX_REQUEST = 80000;
 export const AI_TIMEOUT = 90000;
 
-export function endpointFor(config: AIConfig) {
-  if (config.provider === "openai")
-    return "https://api.openai.com/v1/responses";
-  if (config.provider === "gemini")
-    return `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model.trim().replace(/^models\//, ""))}:generateContent`;
+// Match OpenAI-compatible clients: keep the provider base path and append a
+// resource path. A leading slash in new URL(resource, base) would discard /v1.
+export function compatibleBaseURL(config: AIConfig): string {
   let url: URL;
   try {
-    url = new URL(config.endpoint.trim());
+    url = new URL(config.baseURL.trim());
   } catch {
-    throw new Error("請填寫完整的 Chat Completions API 網址。");
+    throw new Error(
+      "請填寫供應商的 API Base URL，例如 http://localhost:11434/v1。",
+    );
   }
   if (
     !["https:", "http:"].includes(url.protocol) ||
@@ -43,9 +45,26 @@ export function endpointFor(config: AIConfig) {
     url.hash
   )
     throw new Error(
-      "API 網址需使用 HTTP 或 HTTPS，且不可包含帳密、查詢參數或 #。",
+      "Base URL 需使用 HTTP 或 HTTPS，且不可包含帳密、查詢參數或 #。",
     );
+  url.pathname = url.pathname.replace(/\/+$/, "") + "/";
   return url.href;
+}
+export function usesResponses(config: AIConfig): boolean {
+  return (
+    config.provider === "openai" ||
+    (config.provider === "compatible" && config.api === "responses")
+  );
+}
+export function endpointFor(config: AIConfig) {
+  if (config.provider === "openai")
+    return "https://api.openai.com/v1/responses";
+  if (config.provider === "gemini")
+    return `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model.trim().replace(/^models\//, ""))}:generateContent`;
+  return new URL(
+    usesResponses(config) ? "responses" : "chat/completions",
+    compatibleBaseURL(config),
+  ).href;
 }
 export const redactKey = (text: string, key: string) =>
   key.trim() ? text.replaceAll(key.trim(), "[已移除 API Key]") : text;
@@ -73,13 +92,14 @@ export function prepareRequest(
     .trim()
     .replace(config.provider === "gemini" ? /^models\// : /$^/, "");
   let body: object;
-  if (config.provider === "openai")
+  if (usesResponses(config))
     body = {
       model,
       instructions,
       input: cleaned,
       max_output_tokens: config.tokenLimit,
       store: false,
+      stream: false,
     };
   else if (config.provider === "gemini")
     body = {
@@ -95,6 +115,7 @@ export function prepareRequest(
     body = {
       model,
       messages: [{ role: "system", content: instructions }, ...cleaned],
+      stream: false,
       [config.chatTokenField]: config.tokenLimit,
     };
   const serialized = JSON.stringify(body);
@@ -112,12 +133,19 @@ function usageText(input: unknown, output: unknown) {
     ? `輸入 ${input.toLocaleString()}／輸出 ${output.toLocaleString()} tokens（供應商回報）`
     : "供應商未回報用量";
 }
-export function readReply(provider: Provider, data: unknown): AIReply {
+export function readReply(
+  provider: Provider,
+  data: unknown,
+  api?: CompatibleAPI,
+): AIReply {
   const value = obj(data);
   let text = "",
     incomplete = false,
     usage = "";
-  if (provider === "openai") {
+  if (
+    provider === "openai" ||
+    (provider === "compatible" && api === "responses")
+  ) {
     text = arr(value.output)
       .flatMap((item) => arr(obj(item).content))
       .map((part) => {
@@ -130,7 +158,7 @@ export function readReply(provider: Provider, data: unknown): AIReply {
       })
       .filter(Boolean)
       .join("\n\n");
-    incomplete = value.status === "incomplete" || value.status === "failed";
+    incomplete = value.status !== "completed";
     const u = obj(value.usage);
     usage = usageText(u.input_tokens, u.output_tokens);
   } else if (provider === "gemini") {
@@ -175,7 +203,7 @@ export async function askAI(
     signal,
     request.serialized,
   );
-  const reply = readReply(config.provider, parsed);
+  const reply = readReply(config.provider, parsed, config.api);
   return { ...reply, text: redactKey(reply.text, config.key) };
 }
 
@@ -222,7 +250,7 @@ async function requestJSON(
         : response.status === 429
           ? "額度不足或請求過於頻繁"
           : response.status === 400 || response.status === 404
-            ? "模型 ID、API 路徑或參數不支援；相容服務可調整 token 參數"
+            ? "模型 ID、API 模式或參數不支援，請依供應商文件檢查設定"
             : response.status >= 500
               ? "供應商暫時無法服務"
               : "請求未被接受";
@@ -240,7 +268,7 @@ async function requestJSON(
       if (chunk.done) break;
       size += chunk.value.byteLength;
       if (size > 1_000_000)
-        throw new Error("API 回覆超過 1 MB，請縮小請求範圍或手動輸入模型 ID。");
+        throw new Error("API 回覆超過 1 MB，請縮小請求範圍。");
       raw += decoder.decode(chunk.value, { stream: true });
     }
     raw += decoder.decode();
@@ -267,13 +295,7 @@ export function modelsEndpointFor(config: AIConfig): string {
   if (config.provider === "openai") return "https://api.openai.com/v1/models";
   if (config.provider === "gemini")
     return "https://generativelanguage.googleapis.com/v1beta/models";
-  const url = new URL(endpointFor(config));
-  if (!/\/chat\/completions\/?$/.test(url.pathname))
-    throw new Error(
-      "無法推導模型清單路徑；相容端點應以 /chat/completions 結尾，也可直接手動填模型 ID。",
-    );
-  url.pathname = url.pathname.replace(/\/chat\/completions\/?$/, "/models");
-  return url.href;
+  return new URL("models", compatibleBaseURL(config)).href;
 }
 export async function listModels(
   config: AIConfig,

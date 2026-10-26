@@ -26,6 +26,9 @@ import {
   MAX_OUTPUT,
   MAX_QUESTION,
   askAI,
+  compatibleBaseURL,
+  endpointFor,
+  usesResponses,
   listModels,
   modelsEndpointFor,
   MODEL_TIMEOUT,
@@ -62,7 +65,8 @@ type Props = {
 };
 const INITIAL: AIConfig = {
   provider: "openai",
-  endpoint: "",
+  baseURL: "",
+  api: "chat-completions",
   model: "",
   key: "",
   tokenLimit: 2048,
@@ -200,7 +204,7 @@ export function AIAssistant({
   const configured =
     Boolean(config.model.trim()) &&
     keyReady &&
-    (config.provider !== "compatible" || Boolean(config.endpoint.trim()));
+    (config.provider !== "compatible" || Boolean(config.baseURL.trim()));
   useEffect(() => () => controller.current?.abort(), []);
   useEffect(() => {
     if (active) end.current?.scrollIntoView({ block: "nearest" });
@@ -216,7 +220,7 @@ export function AIAssistant({
       modelController.current?.abort();
       modelController.current = null;
     };
-  }, [config.provider, config.endpoint, config.key, config.network, settings]);
+  }, [config.provider, config.baseURL, config.key, config.network, settings]);
   async function loadModels() {
     if (modelController.current) return;
     const abort = new AbortController();
@@ -255,6 +259,14 @@ export function AIAssistant({
     modelEndpoint = modelsEndpointFor(config);
   } catch {
     /* Validation is shown when fetching. */
+  }
+
+  let connectionPaths = "";
+  try {
+    if (config.provider === "compatible")
+      connectionPaths = `Base URL：${compatibleBaseURL(config)}\nPOST ${endpointFor(config)}`;
+  } catch {
+    /* Incomplete base URLs are validated on request. */
   }
 
   function buildMessages(source: CodeSnapshot): Message[] {
@@ -785,35 +797,61 @@ export function AIAssistant({
                 }}
               >
                 <option value="openai">OpenAI（Responses API）</option>
-                <option value="compatible">
-                  OpenAI 相容服務（Chat Completions）
-                </option>
+                <option value="compatible">OpenAI 相容服務</option>
                 <option value="gemini">Google Gemini（GenerateContent）</option>
               </select>
             </label>
             {config.provider === "compatible" && (
               <label>
-                完整 API 網址
+                API Base URL
                 <input
                   type="url"
                   autoComplete="off"
                   spellCheck={false}
-                  value={config.endpoint}
-                  placeholder="https://your-service.example/v1/chat/completions"
+                  value={config.baseURL}
+                  placeholder="http://localhost:11434/v1"
                   onChange={(e) =>
                     setConfig((c) => ({
                       ...c,
-                      endpoint: e.target.value,
+                      baseURL: e.target.value,
                       key: "",
                     }))
                   }
                 />
                 <small>
-                  支援
-                  HTTP／HTTPS，本機與區域網路皆可。更換網址會清除金鑰；服務須允許瀏覽器
-                  CORS。
+                  填供應商文件的 Base URL（含 /v1 或 /api/v1 等前綴），不需填
+                  /chat/completions。支援
+                  HTTP／HTTPS；更換網址會清除金鑰，服務須允許 CORS。
                 </small>
               </label>
+            )}
+            {config.provider === "compatible" && (
+              <>
+                <label>
+                  API 模式
+                  <select
+                    aria-label="API 模式"
+                    value={config.api ?? "chat-completions"}
+                    onChange={(e) =>
+                      setConfig((c) => ({
+                        ...c,
+                        api: e.target.value as AIConfig["api"],
+                      }))
+                    }
+                  >
+                    <option value="chat-completions">Chat Completions</option>
+                    <option value="responses">Responses</option>
+                  </select>
+                  <small>
+                    依供應商支援的 API 選擇；失敗時不會自動切換協定或重送。
+                  </small>
+                </label>
+                {connectionPaths && (
+                  <p className="ai-small ai-model-endpoint">
+                    {connectionPaths}
+                  </p>
+                )}
+              </>
             )}
             <label>
               模型 ID
@@ -947,7 +985,7 @@ export function AIAssistant({
                   ))}
                 </select>
               </label>
-              {config.provider === "compatible" && (
+              {config.provider === "compatible" && !usesResponses(config) && (
                 <label>
                   上限參數
                   <select
