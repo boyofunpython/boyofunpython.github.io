@@ -48,7 +48,11 @@ export async function readWorkspace(): Promise<Workspace> {
     let code = starter;
     try {
       code =
-        (await (await courseStore()).getItem("user"))?.editorContent ?? starter;
+        (
+          await (
+            await courseStore()
+          ).getItem<{ editorContent?: string }>("user")
+        )?.editorContent ?? starter;
     } catch {
       /* New workspace. */
     }

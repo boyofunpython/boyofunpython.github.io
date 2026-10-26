@@ -12,15 +12,9 @@ async function ready(page: Page) {
 }
 async function code(page: Page, value: string) {
   await page.getByRole("button", { name: "程式碼", exact: true }).click();
-  await page.locator(".CodeMirror").evaluate(
-    (element, text) =>
-      (
-        element as HTMLElement & {
-          CodeMirror: { setValue(value: string): void };
-        }
-      ).CodeMirror.setValue(text),
-    value,
-  );
+  await page
+    .getByRole("textbox", { name: "Python 程式碼", exact: true })
+    .fill(value);
 }
 async function closeResult(page: Page) {
   await results(page)
@@ -48,14 +42,14 @@ test("workspace fills desktop, tablet, phone and landscape viewports", async ({
     await expect
       .poll(() =>
         page
-          .locator(".mirror-host")
+          .locator(".editor-surfaces")
           .evaluate((element) =>
             Math.abs(element.getBoundingClientRect().bottom - innerHeight + 28),
           ),
       )
       .toBeLessThan(4);
-    const host = (await page.locator(".mirror-host").boundingBox())!;
-    const cm = (await page.locator(".CodeMirror").boundingBox())!;
+    const host = (await page.locator(".editor-surfaces").boundingBox())!;
+    const cm = (await page.locator(".cm-editor").boundingBox())!;
     expect(host.width).toBe(viewport.width);
     expect(host.height / viewport.height).toBeGreaterThan(
       viewport.height < 450 ? 0.6 : 0.69,
@@ -63,7 +57,7 @@ test("workspace fills desktop, tablet, phone and landscape viewports", async ({
     const stacked = viewport.width < 675;
     await expect
       .poll(
-        async () => (await page.locator(".CodeMirror").boundingBox())!.height,
+        async () => (await page.locator(".cm-editor").boundingBox())!.height,
       )
       .toBeGreaterThan(host.height * (stacked ? 0.48 : 0.97));
     expect(cm.x + cm.width).toBeLessThanOrEqual(viewport.width + 1);
@@ -214,7 +208,7 @@ test("closing a running modal stops Python and preserves the code", async ({
   await page.keyboard.press("Escape");
   await expect(results(page)).toHaveCount(0);
   await expect(run(page)).toBeEnabled();
-  await expect(page.locator(".CodeMirror")).toContainText("while True:");
+  await expect(page.locator(".cm-content")).toContainText("while True:");
   await expect(run(page)).toBeFocused();
   await page.getByRole("button", { name: "上次結果", exact: true }).click();
   await expect(results(page).locator(".result-error")).toContainText(

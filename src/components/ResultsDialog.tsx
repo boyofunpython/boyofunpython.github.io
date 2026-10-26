@@ -13,7 +13,8 @@ import {
 } from "lucide-react";
 import { Dialog } from "./Dialog";
 import { Graphics } from "./Graphics";
-import type { RunResult } from "../runtime";
+import { InputPrompt } from "./InputPrompt";
+import type { InputRequest, RunResult } from "../runtime";
 
 export function ResultsDialog({
   result,
@@ -25,6 +26,9 @@ export function ResultsDialog({
   onClear,
   onReset,
   restoreFocus,
+  input,
+  liveOutput,
+  onInput,
 }: {
   result: RunResult | null;
   runState: "idle" | "loading" | "running";
@@ -35,6 +39,9 @@ export function ResultsDialog({
   onClear: () => void;
   onReset: () => void;
   restoreFocus?: HTMLElement | null;
+  input: InputRequest | null;
+  liveOutput: string;
+  onInput(value: string | null): void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
@@ -94,9 +101,11 @@ export function ResultsDialog({
             )
           ) : null}
           {busy
-            ? runState === "loading"
-              ? "正在準備 Python…"
-              : "程式執行中…"
+            ? input
+              ? "等待你的輸入…"
+              : runState === "loading"
+                ? "正在準備 Python…"
+                : "程式執行中…"
             : result
               ? result.error
                 ? "執行已停止"
@@ -111,7 +120,28 @@ export function ResultsDialog({
         className={`results-body ${result?.html ? "has-graphics" : ""}`}
         aria-busy={busy}
       >
-        {busy ? (
+        {busy && (input || liveOutput) ? (
+          <>
+            <section className="text-output" aria-label="即時輸出">
+              <div className="text-output-heading">
+                <h3>文字輸出</h3>
+              </div>
+              <pre className="result-text">{liveOutput}</pre>
+            </section>
+            {input ? (
+              <InputPrompt
+                key={input.id}
+                request={input}
+                onSubmit={onInput}
+                onEOF={() => onInput(null)}
+              />
+            ) : (
+              <p className="live-output-status" role="status">
+                程式執行中…
+              </p>
+            )}
+          </>
+        ) : busy ? (
           <div className="result-placeholder">
             <LoaderCircle size={30} className="spin" />
             <strong>

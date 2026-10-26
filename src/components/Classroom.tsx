@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Copy, Radio, Send, Unplug, Users, LoaderCircle } from "lucide-react";
-import { loadScript, type PeerClient, type Connection } from "../legacy";
+import type { Peer as PeerClient, DataConnection as Connection } from "peerjs";
 
 export function Classroom({
   getCode,
@@ -55,14 +55,9 @@ export function Classroom({
     setStatus("正在建立連線…");
     const token = ++session.current;
     try {
-      await loadScript("js/peerjs.min.js");
+      const { createClassroomPeer } = await import("../classroom-peer");
       if (token !== session.current) return;
-      const client = new window.Peer({
-        host: "boyofunpython.ddns.net",
-        key: "killkliAPI",
-        secure: true,
-        port: 9000,
-      });
+      const client = createClassroomPeer();
       peer.current = client;
       timeout.current = setTimeout(() => {
         disconnect();

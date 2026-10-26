@@ -1,87 +1,204 @@
-"""Browser output adapters for the bundled Python and turtle distributions."""
-import sys
+"""Boyo Python Studio 2: shared learner namespace, real input and SVG output."""
+import asyncio
 import builtins
-import myturtle
-import importlib
-_svg = importlib.import_module('myturtle.svg')
-from js import studioWrite, document
+import codeop
+import csv
+import io
+import json
+import math
+import base64
+import rlcompleter
+import sys
+import traceback
+from pyodide.code import eval_code_async
+from pyodide.ffi import can_run_sync, run_sync, jsnull
+from boyo import write as _write, request_input as _request_input, document as _document
+import boyo_turtle
+sys.modules['turtle'] = boyo_turtle
+sys.modules['myturtle'] = boyo_turtle
 
-sys.modules['turtle'] = myturtle
-
-
-# The original SVG factory lowercases every attribute. SVG and SMIL use
-# case-sensitive viewBox, attributeName, attributeType and preserveAspectRatio.
-# Preserve their spelling before serialization, rather than repairing markup.
-def _studio_svg_tag(tag):
-    def create(*args, **kwargs):
-        node = document.createElementNS(_svg._svg_ns, tag)
-        if tag == 'svg':
-            node.setAttribute('xmlns', _svg._svg_ns)
-        for arg in args:
-            if isinstance(arg, (str, int, float)):
-                arg = document.createTextNode(str(arg))
-            node.appendChild(arg)
-        for key, value in kwargs.items():
-            if key.startswith('on'):
-                node.addEventListener(key[2:], value)
-            elif key == 'style':
-                node.setAttribute('style', ';'.join(f'{k}: {v}' for k, v in value.items()))
-            elif 'href' in key:
-                node.setAttributeNS(_svg._xlink_ns, 'href', value)
-            elif value is not False:
-                attribute = key.lower() if key in ('Id', 'From') else key.replace('_', '-')
-                node.setAttributeNS(None, attribute, value)
-        return node
-    return create
-
-
-for _tag in _svg._svg_tags:
-    setattr(_svg, _tag, _studio_svg_tag(_tag))
-
-
-def _studio_done():
-    # done() is often followed by another statement; don't rely on the final
-    # Python expression's return value to display the scene.
-    document.getElementById('result').innerHTML = myturtle.Screen().show_scene()
-
-
-myturtle.done = myturtle.mainloop = myturtle.show_scene = _studio_done
+_namespace = {'__name__': '__main__'}
+_console_buffer = []
+_current_turtle_svg = None
+_last_turtle_svg = None
 
 
 class StudioOutput:
-    def write(self, value):
-        studioWrite(value)
-        return len(value)
+    def __init__(self, stream):
+        self.stream = stream
+
+    def write(self, text):
+        _write(str(text), self.stream)
+        return len(text)
 
     def flush(self):
         pass
 
-
-sys.stdout = sys.stderr = StudioOutput()
+    def isatty(self):
+        return True
 
 
 def studio_input(prompt=''):
-    raise RuntimeError('這個練習室不支援 input() 互動輸入，請使用「虛擬機器」執行。')
+    value = _request_input(str(prompt))
+    if isinstance(value, str):
+        return value
+    if not can_run_sync():
+        raise RuntimeError('此瀏覽器尚未支援即時 input()。請在 Console 的「預先輸入」提供每行輸入，或使用支援 JSPI 的新版 Chrome。')
+    result = run_sync(value)
+    if result is None or result is jsnull:
+        raise EOFError('輸入已取消')
+    return str(result)
 
 
-builtins.input = studio_input
+def _display_hook(value):
+    if value is not None:
+        _namespace['_'] = value
+        _write(repr(value) + '\n', 'stdout')
 
 
-def _studio_tracer(self, n=None, delay=None):
+def display(value):
+    target = _document.getElementById('result')
+    if hasattr(value, '_repr_svg_'):
+        target.innerHTML += value._repr_svg_()
+    elif hasattr(value, '_repr_html_'):
+        target.innerHTML += value._repr_html_()
+    elif hasattr(value, '_repr_png_'):
+        image = value._repr_png_()
+        encoded = base64.b64encode(image).decode() if isinstance(image, bytes) else image
+        target.innerHTML += f'<img alt="Python 圖形" src="data:image/png;base64,{encoded}">'
+    elif hasattr(value, 'savefig'):
+        stream = io.BytesIO()
+        value.savefig(stream, format='png')
+        encoded = base64.b64encode(stream.getvalue()).decode()
+        target.innerHTML += f'<img alt="Python 圖形" src="data:image/png;base64,{encoded}">'
+    elif isinstance(value, str) and value.lstrip().startswith('<svg'):
+        target.innerHTML += value
+    else:
+        print(value)
+
+
+def _turtle_done(*, automatic=False):
+    global _current_turtle_svg, _last_turtle_svg
+    scene = boyo_turtle.Screen().show_scene()
+    target = _document.getElementById('result')
+    if _current_turtle_svg is not None:
+        target.innerHTML = target.innerHTML.replace(_current_turtle_svg, scene, 1)
+    elif not automatic or scene != _last_turtle_svg:
+        target.innerHTML += scene
+    else:
+        return
+    _current_turtle_svg = _last_turtle_svg = scene
+
+
+def _tracer(self, n=None, delay=None):
     if n is None:
         return int(self._animate)
     self.animation('off' if n == 0 else 'on')
 
 
-# The bundled turtle left tracer() as an unimplemented warning. Support the
-# common static/animated switch for both turtle.tracer() and Screen.tracer().
-myturtle.Screen.tracer = _studio_tracer
-_original_restart = myturtle.restart
+_original_restart = boyo_turtle.restart
 
 
-def _studio_restart():
-    myturtle.Screen().animation('on')
+def _restart():
+    global _last_turtle_svg
+    _last_turtle_svg = None
+    boyo_turtle.Screen().animation('on')
     _original_restart()
 
 
-myturtle.restart = _studio_restart
+boyo_turtle.restart = _restart
+boyo_turtle.done = boyo_turtle.mainloop = boyo_turtle.show_scene = _turtle_done
+boyo_turtle.Screen.tracer = _tracer
+builtins.input = studio_input
+
+
+async def aloadCSV(path):
+    from pyodide.http import pyfetch
+    from urllib.parse import urljoin
+    response = await pyfetch(urljoin('https://boyofunpython.ddns.net:8787/', path))
+    return list(csv.reader(io.StringIO(await response.string())))
+
+
+def loadCSV(path):
+    return run_sync(aloadCSV(path))
+
+
+_helpers = {'aloadCSV': aloadCSV, 'display': display, 'boyoDisplay': display, 'loadCSV': loadCSV, 'sqrt': math.sqrt, 'pow': pow}
+_namespace.update(_helpers)
+
+
+async def _studio_execute(source, filename, mode):
+    global _current_turtle_svg
+    _current_turtle_svg = None
+    sys.stdout, sys.stderr = StudioOutput('stdout'), StudioOutput('stderr')
+    sys.displayhook = _display_hook
+    builtins.input = studio_input
+    _namespace['__file__'] = filename
+    if mode == 'run':
+        _console_buffer.clear()
+        _restart()
+        value = await eval_code_async(source, globals=_namespace, filename=filename)
+        if value is not None:
+            display(value)
+        return False
+    _console_buffer.append(source)
+    combined = '\n'.join(_console_buffer)
+    try:
+        compiled = codeop.compile_command(combined, '<博幼 Console>', 'single')
+    except BaseException:
+        _console_buffer.clear()
+        raise
+    if compiled is None:
+        return True
+    _console_buffer.clear()
+    exec(compiled, _namespace)
+    return False
+
+
+def _studio_finalize():
+    if boyo_turtle.Screen().turtles():
+        _turtle_done(automatic=True)
+
+
+async def _studio_dispatch(source, filename, mode):
+    # Format learner errors before crossing into JavaScript: Pyodide's
+    # exception formatter otherwise writes the traceback into redirected stderr.
+    outcome = {}
+    try:
+        outcome['incomplete'] = await _studio_execute(source, filename, mode)
+    except BaseException:
+        outcome['error'] = traceback.format_exc()
+    try:
+        _studio_finalize()
+    except BaseException:
+        outcome.setdefault('error', traceback.format_exc())
+    return json.dumps(outcome)
+
+
+def _studio_variables():
+    rows = []
+    for name, value in sorted(_namespace.items()):
+        if name.startswith('_') or name in _helpers and value is _helpers[name]:
+            continue
+        if type(value) in (str, int, float, bool, type(None)):
+            preview = repr(value)[:160]
+        elif type(value) in (list, tuple, dict, set, frozenset):
+            preview = f'{len(value)} 個項目'
+        else:
+            preview = f'<{type(value).__name__}>'
+        rows.append({'name': name, 'type': type(value).__name__, 'value': preview})
+        if len(rows) >= 80:
+            break
+    return json.dumps(rows, ensure_ascii=False)
+
+
+def _studio_complete(prefix):
+    completer = rlcompleter.Completer(_namespace)
+    options = []
+    for index in range(60):
+        option = completer.complete(prefix, index)
+        if option is None:
+            break
+        if option not in options:
+            options.append(option)
+    return json.dumps(options, ensure_ascii=False)

@@ -1,6 +1,40 @@
 import { useEffect, useRef, useState } from "react";
+import { EditorState, Compartment } from "@codemirror/state";
+import {
+  EditorView,
+  keymap,
+  lineNumbers,
+  highlightActiveLine,
+  drawSelection,
+} from "@codemirror/view";
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  indentMore,
+  indentLess,
+} from "@codemirror/commands";
+import { python } from "@codemirror/lang-python";
+import {
+  defaultHighlightStyle,
+  syntaxHighlighting,
+  bracketMatching,
+  indentUnit,
+} from "@codemirror/language";
+import {
+  autocompletion,
+  closeBrackets,
+  closeBracketsKeymap,
+} from "@codemirror/autocomplete";
+import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { LoaderCircle, TriangleAlert } from "lucide-react";
-import { loadEditor, type EditorMode, type Mirror } from "../legacy";
+import {
+  Blockly,
+  pythonGenerator,
+  toolbox as makeToolbox,
+} from "../editor/blocks";
+import { parsePython } from "../runtime";
+import type { EditorMode, EditorApi } from "../legacy";
 
 export function Editor({
   code,
@@ -12,118 +46,225 @@ export function Editor({
   code: string;
   mode: EditorMode;
   toolbox: string;
-  onChange: (code: string) => void;
-  onReady: (mirror: Mirror) => void;
+  onChange(code: string): void;
+  onReady(editor: EditorApi): void;
 }) {
   const host = useRef<HTMLDivElement>(null);
-  const mirror = useRef<Mirror | null>(null);
+  const textHost = useRef<HTMLDivElement>(null);
+  const blocksHost = useRef<HTMLDivElement>(null);
+  const textView = useRef<EditorView | null>(null);
+  const blockView = useRef<Blockly.WorkspaceSvg | null>(null);
   const latest = useRef({ code, mode, toolbox, onChange, onReady });
   latest.current = { code, mode, toolbox, onChange, onReady };
-  const [state, setState] = useState("loading");
-  const [attempt, setAttempt] = useState(0);
+  const quiet = useRef(false);
+  const generation = useRef(0);
+  const changedBlocks = useRef(false);
+  const [parseState, setParseState] = useState("");
+  const [parseError, setParseError] = useState("");
+  const [retry, setRetry] = useState(0);
+  const modeSetting = useRef(new Compartment());
+  async function synchronize(source: string) {
+    const token = ++generation.current;
+    if (latest.current.mode === "text") return;
+    setParseState("正在同步方塊…");
+    setParseError("");
+    try {
+      const result = await parsePython(source);
+      if (token !== generation.current || !blockView.current) return;
+      if (result.error) {
+        setParseError(result.error + "。修正程式碼後會自動同步。");
+        return;
+      }
+      quiet.current = true;
+      Blockly.Events.disable();
+      try {
+        Blockly.serialization.workspaces.load(result.state!, blockView.current);
+      } finally {
+        Blockly.Events.enable();
+        quiet.current = false;
+      }
+      blockView.current.clearUndo();
+      Blockly.svgResize(blockView.current);
+    } catch (error) {
+      if (token === generation.current) setParseError((error as Error).message);
+    } finally {
+      if (token === generation.current) setParseState("");
+    }
+  }
   useEffect(() => {
-    let cancelled = false;
-    let frame = 0;
-    setState("loading");
-    let observer: ResizeObserver;
-    loadEditor()
-      .then(() => {
-        if (cancelled || !host.current) return;
-        const instance = new window.BlockMirror({
-          container: host.current,
-          toolbox: latest.current.toolbox,
-          height: Math.max(240, host.current.clientHeight),
-          blockDelay: false,
-          viewMode: latest.current.mode,
+    const cm = new EditorView({
+      parent: textHost.current!,
+      state: EditorState.create({
+        doc: latest.current.code,
+        extensions: [
+          lineNumbers(),
+          history(),
+          drawSelection(),
+          highlightActiveLine(),
+          highlightSelectionMatches(),
+          python(),
+          syntaxHighlighting(defaultHighlightStyle),
+          bracketMatching(),
+          closeBrackets(),
+          autocompletion(),
+          indentUnit.of("    "),
+          keymap.of([
+            { key: "Tab", run: indentMore },
+            { key: "Shift-Tab", run: indentLess },
+            {
+              key: "Escape",
+              run: (view) => {
+                view.contentDOM.blur();
+                return true;
+              },
+            },
+            ...closeBracketsKeymap,
+            ...defaultKeymap,
+            ...historyKeymap,
+            ...searchKeymap,
+          ]),
+          EditorView.contentAttributes.of({
+            "aria-label": "Python 程式碼",
+            "aria-describedby": "editor-keyboard-help",
+            "data-editor-input": "true",
+          }),
+          EditorView.updateListener.of((update) => {
+            if (update.docChanged && !quiet.current)
+              latest.current.onChange(update.state.doc.toString());
+          }),
+          modeSetting.current.of(EditorView.editable.of(true)),
+        ],
+      }),
+    });
+    textView.current = cm;
+    const workspace = Blockly.inject(blocksHost.current!, {
+      toolbox: makeToolbox(latest.current.toolbox === "full"),
+      media: import.meta.env.BASE_URL + "vendor/blockly/",
+      renderer: "zelos",
+      sounds: false,
+      trashcan: true,
+      zoom: {
+        controls: true,
+        wheel: true,
+        startScale: 0.9,
+        minScale: 0.35,
+        maxScale: 2.2,
+      },
+      move: { scrollbars: true, drag: true, wheel: true },
+    });
+    blockView.current = workspace;
+    const api: EditorApi = {
+      getCode: () => cm.state.doc.toString(),
+      setCode(value) {
+        cm.dispatch({
+          changes: { from: 0, to: cm.state.doc.length, insert: value },
         });
-        mirror.current = instance;
-        instance.textEditor.codeMirror
-          .getInputField()
-          .setAttribute("aria-label", "Python 程式碼");
-        host.current
-          .querySelector(".injectionDiv")
-          ?.setAttribute("role", "region");
-        instance.textEditor.textSidebar.classList.add("mirror-text-spacer");
-        instance.textEditor.codeMirror.setOption("indentUnit", 4);
-        instance.textEditor.codeMirror.setOption("tabSize", 4);
-        instance.textEditor.codeMirror.setOption("extraKeys", {
-          Tab: "indentMore",
-          "Shift-Tab": "indentLess",
-          Esc: () => instance.textEditor.codeMirror.getInputField().blur(),
-        });
-        instance.textEditor.codeMirror
-          .getInputField()
-          .setAttribute("aria-describedby", "editor-keyboard-help");
-        instance.setCode(latest.current.code);
-        instance.addChangeListener((event) =>
-          latest.current.onChange(event.value),
-        );
-        latest.current.onReady(instance);
-        setState("ready");
-        const resize = () => {
-          const height = host.current?.clientHeight ?? 0;
-          if (!height) return;
-          instance.configuration.height = height;
-          instance.textEditor.resizeResponsively();
-          instance.refresh();
-        };
-        observer = new ResizeObserver(() => {
-          cancelAnimationFrame(frame);
-          frame = requestAnimationFrame(resize);
-        });
-        observer.observe(host.current);
-        frame = requestAnimationFrame(resize);
-      })
-      .catch(() => {
-        if (!cancelled) setState("error");
-      });
-    return () => {
-      cancelled = true;
-      observer?.disconnect();
-      cancelAnimationFrame(frame);
-      mirror.current?.blockEditor.workspace.dispose();
-      mirror.current?.textEditor.codeMirror.toTextArea();
-      mirror.current = null;
-      host.current?.replaceChildren();
+      },
+      focus: () => cm.focus(),
     };
-  }, [attempt]);
+    workspace.addChangeListener((event) => {
+      if (
+        quiet.current ||
+        event.isUiEvent ||
+        event.type === Blockly.Events.FINISHED_LOADING
+      )
+        return;
+      if (workspace.isDragging()) {
+        changedBlocks.current = true;
+        return;
+      }
+      generation.current++;
+      setParseState("");
+      setParseError("");
+      const next = pythonGenerator.workspaceToCode(workspace);
+      quiet.current = true;
+      cm.dispatch({
+        changes: { from: 0, to: cm.state.doc.length, insert: next },
+      });
+      quiet.current = false;
+      changedBlocks.current = true;
+      latest.current.onChange(next);
+    });
+    latest.current.onReady(api);
+    const observer = new ResizeObserver(() => {
+      if (host.current?.clientHeight) {
+        cm.requestMeasure();
+        Blockly.svgResize(workspace);
+      }
+    });
+    observer.observe(host.current!);
+    const resize = () => {
+      cm.requestMeasure();
+      Blockly.svgResize(workspace);
+    };
+    window.addEventListener("resize", resize);
+    return () => {
+      generation.current++;
+      observer.disconnect();
+      window.removeEventListener("resize", resize);
+      workspace.dispose();
+      cm.destroy();
+      blockView.current = null;
+      textView.current = null;
+    };
+  }, []);
   useEffect(() => {
-    if (mirror.current && mirror.current.getCode() !== code)
-      mirror.current.setCode(code);
-  }, [code]);
+    const cm = textView.current;
+    if (cm && cm.state.doc.toString() !== code) {
+      quiet.current = true;
+      cm.dispatch({
+        changes: { from: 0, to: cm.state.doc.length, insert: code },
+      });
+      quiet.current = false;
+    }
+    if (changedBlocks.current) {
+      changedBlocks.current = false;
+      return;
+    }
+    if (mode !== "text") {
+      setParseState("正在同步方塊…");
+      setParseError("");
+    }
+    const timeout = setTimeout(() => synchronize(code), 160);
+    return () => clearTimeout(timeout);
+  }, [code, mode, retry]);
   useEffect(() => {
-    mirror.current?.setMode(mode);
-    mirror.current?.refresh();
-  }, [mode]);
-  useEffect(() => {
-    if (!mirror.current) return;
-    mirror.current.configuration.toolbox = toolbox;
-    mirror.current.blockEditor.remakeToolbox();
+    blockView.current?.updateToolbox(makeToolbox(toolbox === "full"));
   }, [toolbox]);
+  useEffect(() => {
+    blockView.current?.setVisible(mode !== "text");
+    textView.current?.requestMeasure();
+    if (blockView.current) Blockly.svgResize(blockView.current);
+  }, [mode]);
   return (
-    <div className="editor-wrap">
-      {state !== "ready" && (
-        <div className="editor-loading" role="status">
-          {state === "loading" ? (
-            <>
-              <LoaderCircle className="spin" /> 正在準備編輯器…
-            </>
+    <div ref={host} className={`editor-wrap modern-editor mode-${mode}`}>
+      {mode !== "text" && (parseState || parseError) && (
+        <div
+          className={`block-sync-status ${parseError ? "has-error" : ""}`}
+          role="status"
+        >
+          {parseError ? (
+            <TriangleAlert size={15} />
           ) : (
-            <>
-              <TriangleAlert /> 編輯器載入失敗，請檢查網路。
-              <button onClick={() => setAttempt((n) => n + 1)}>
-                重新載入編輯器
-              </button>
-            </>
+            <LoaderCircle className="spin" size={15} />
+          )}
+          {parseError || parseState}
+          {parseError && (
+            <button onClick={() => setRetry((value) => value + 1)}>重試</button>
           )}
         </div>
       )}
-      <div
-        ref={host}
-        className="mirror-host"
-        role="group"
-        aria-label="Python 程式編輯器"
-      />
+      <div className="editor-surfaces">
+        <div
+          ref={blocksHost}
+          className="blocks-host"
+          inert={!!parseState || !!parseError}
+          aria-busy={!!parseState}
+          aria-label="Python 方塊編輯器"
+          role="region"
+        />
+        <div ref={textHost} className="text-host" />
+      </div>
     </div>
   );
 }

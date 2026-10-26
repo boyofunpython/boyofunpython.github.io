@@ -4,3 +4,10 @@ artifacts/
 test-results/
 playwright-report/
 .DS_Store
+public/vendor/
+public/python/
+public/images/
+public/versions.json
+public/third-party-licenses.json
+.firecrawl/
+public/manifest.json

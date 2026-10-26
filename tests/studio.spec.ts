@@ -39,11 +39,14 @@ async function openNav(page: Page) {
 async function setCode(page: Page, code: string) {
   await closeResults(page);
   await page.getByRole("button", { name: "程式碼", exact: true }).click();
-  await page.locator(".CodeMirror").evaluate((element, value) => {
-    (
-      element as HTMLElement & { CodeMirror: { setValue(code: string): void } }
-    ).CodeMirror.setValue(value);
-  }, code);
+  const input = page.getByRole("textbox", {
+    name: "Python 程式碼",
+    exact: true,
+  });
+  await input.fill(code);
+  await expect(page.locator(".cm-content")).toContainText(
+    code.split("\n").filter(Boolean).at(-1)!,
+  );
 }
 
 test("Python executes, reports errors, stops loops and runs after resetting", async ({
@@ -92,11 +95,11 @@ test("files save across reloads, rename, import, export, and delete", async ({
   await page.getByRole("button", { name: "建立檔案", exact: true }).click();
   await setCode(page, 'print("second file")');
   await selectFile(page, "main.py");
-  await expect(page.locator(".CodeMirror")).toContainText("persisted main");
+  await expect(page.locator(".cm-content")).toContainText("persisted main");
   await page.reload();
-  await expect(page.locator(".CodeMirror")).toContainText("persisted main");
+  await expect(page.locator(".cm-content")).toContainText("persisted main");
   await selectFile(page, "第二支.py");
-  await expect(page.locator(".CodeMirror")).toContainText("second file");
+  await expect(page.locator(".cm-content")).toContainText("second file");
   await page.getByLabel("檔案操作").click();
   await fileAction(page, "重新命名");
   await page.getByLabel("檔案名稱").fill("main.py");
@@ -112,7 +115,7 @@ test("files save across reloads, rename, import, export, and delete", async ({
     mimeType: "text/plain",
     buffer: Buffer.from('print("imported")'),
   });
-  await expect(page.locator(".CodeMirror")).toContainText("imported");
+  await expect(page.locator(".cm-content")).toContainText("imported");
   await fileAction(page, "刪除檔案");
   await page.getByRole("button", { name: "確定刪除", exact: true }).click();
   await expect(
@@ -135,20 +138,16 @@ test("examples use client-side navigation, preserve editor, and synchronize bloc
   await page.getByRole("button", { name: "迴圈", exact: true }).click();
   await expect(page.locator(".example-card")).toHaveCount(1);
   await page.getByRole("button", { name: "開啟範例", exact: false }).click();
-  await expect(page.locator(".CodeMirror")).toContainText("range(1, 11)");
+  await expect(page.locator(".cm-content")).toContainText("range(1, 11)");
   await page.getByRole("button", { name: "分割", exact: true }).click();
   await expect(
-    page
-      .locator(".blocklyBlockCanvas")
-      .first()
-      .locator(".blocklyDraggable")
-      .first(),
-  ).toBeVisible();
+    page.getByRole("button", { name: "Edit text: range", exact: true }),
+  ).toBeVisible({ timeout: 90000 });
   await page.getByRole("button", { name: "方塊", exact: true }).click();
   await expect(page.locator(".blocklySvg").first()).toBeVisible();
   await selectFile(page, "main.py");
   await page.getByRole("button", { name: "程式碼", exact: true }).click();
-  await expect(page.locator(".CodeMirror")).toContainText("my original");
+  await expect(page.locator(".cm-content")).toContainText("my original");
   await page.getByRole("link", { name: "靈感範例", exact: false }).click();
   await page.screenshot({
     path: "artifacts/examples-desktop.png",
@@ -296,17 +295,34 @@ test("migrates legacy IndexedDB files without replacing them on another visit", 
   page,
 }) => {
   await editor(page);
-  await page.addScriptTag({ url: "/js/indexfs.min.js" });
   await page.evaluate(async () => {
-    const fs = (
-      window as unknown as {
-        "indexeddb-fs": {
-          createFs(): { writeFile(path: string, code: string): Promise<void> };
+    const request = indexedDB.open("indexeddb-fs", 1);
+    await new Promise<void>((resolve, reject) => {
+      request.onupgradeneeded = () =>
+        request.result.createObjectStore("files", { keyPath: "fullPath" });
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const db = request.result;
+        const transaction = db.transaction("files", "readwrite");
+        for (const [name, data] of [
+          ["main.py", 'print("legacy main")'],
+          ["legacy.py", 'print("legacy second")'],
+        ])
+          transaction.objectStore("files").put({
+            name,
+            data,
+            fullPath: "root/" + name,
+            directory: "root",
+            type: "file",
+            createdAt: Date.now(),
+          });
+        transaction.oncomplete = () => {
+          db.close();
+          resolve();
         };
-      }
-    )["indexeddb-fs"].createFs();
-    await fs.writeFile("root/main.py", 'print("legacy main")');
-    await fs.writeFile("root/legacy.py", 'print("legacy second")');
+        transaction.onerror = () => reject(transaction.error);
+      };
+    });
     localStorage.removeItem("boyo-studio-v1");
   });
   await page.reload();
@@ -317,37 +333,38 @@ test("migrates legacy IndexedDB files without replacing them on another visit", 
       .filter({ hasText: "legacy.py" }),
   ).toHaveCount(1);
   await selectFile(page, "main.py");
-  await expect(page.locator(".CodeMirror")).toContainText("legacy main");
+  await expect(page.locator(".cm-content")).toContainText("legacy main");
   await setCode(page, 'print("updated after migration")');
   await page.reload();
-  await expect(page.locator(".CodeMirror")).toContainText(
+  await expect(page.locator(".cm-content")).toContainText(
     "updated after migration",
   );
 });
 
-test("course handoff carries the current code into the existing virtual machine", async ({
+test("console handoff carries the current file into the native console", async ({
   page,
 }) => {
   await editor(page);
-  await setCode(page, 'print("course handoff")');
-  const popupEvent = page.waitForEvent("popup");
-  await fileAction(page, "開啟虛擬機器");
-  const popup = await popupEvent;
-  await popup.waitForURL("**/course/#ide");
-  await expect
-    .poll(() =>
-      page.evaluate(
-        async () =>
-          (
-            await window.localforage
-              .createInstance({ name: "futurecoder" })
-              .getItem("user")
-          )?.editorContent,
-      ),
-    )
-    .toBe('print("course handoff")');
-  await expect(popup.locator("#root")).not.toBeEmpty();
-  await popup.close();
+  await setCode(page, 'name = "course handoff"\nprint(name)');
+  await fileAction(page, "開啟 Python Console");
+  await expect(page).toHaveURL(/#\/console$/);
+  await expect(
+    page.getByRole("heading", { name: "博幼 Python Console", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "執行目前檔案", exact: true }).click();
+  await expect(page.getByRole("log", { name: "Console 紀錄" })).toContainText(
+    "course handoff",
+    { timeout: 90000 },
+  );
+  await page
+    .getByRole("textbox", { name: "Python Console 指令", exact: true })
+    .fill("name");
+  await page
+    .getByRole("button", { name: "送出 Console 指令", exact: true })
+    .click();
+  await expect(page.locator(".entry-stdout").last()).toContainText(
+    "'course handoff'",
+  );
 });
 
 test.describe("classroom transport", () => {
@@ -357,7 +374,7 @@ test.describe("classroom transport", () => {
   }) => {
     // Exercise the original wire protocol without contacting the production
     // signaling server or exposing any real classroom/student information.
-    await page.route("**/js/peerjs.min.js", (route) =>
+    await page.route("**/assets/classroom-peer-*.js", (route) =>
       route.fulfill({
         contentType: "text/javascript",
         body: `
@@ -367,13 +384,14 @@ test.describe("classroom transport", () => {
       send(data) { window.testSent = data; }
       close() { this.open = false; this.handlers.close?.(); }
     }
-    window.Peer = class {
+    class Peer {
       constructor() { this.handlers = {}; window.testPeer = this; }
       on(name, callback) { this.handlers[name] = callback; if (name === 'open') setTimeout(() => callback('test-classroom-id'), 5); }
       destroy() { window.testDestroyed = true; window.testConnection?.close(); }
       connect() { return new Connection(); }
       addStudent() { const connection = new Connection(); window.testConnection = connection; this.handlers.connection(connection); connection.handlers.open(); }
     };
+    export function createClassroomPeer() { return new Peer(); }
   `,
       }),
     );
@@ -408,9 +426,9 @@ test.describe("classroom transport", () => {
       }),
     );
     await page.getByRole("button", { name: "另存並開啟", exact: true }).click();
-    await expect(page.locator(".CodeMirror")).toContainText("student response");
+    await expect(page.locator(".cm-content")).toContainText("student response");
     await selectFile(page, "main.py");
-    await expect(page.locator(".CodeMirror")).toContainText("teacher draft");
+    await expect(page.locator(".cm-content")).toContainText("teacher draft");
     expect(
       await page.evaluate(
         () => (window as unknown as { testDestroyed: boolean }).testDestroyed,
@@ -437,7 +455,7 @@ test("warm Python runtime and workspace work after going offline", async ({
   });
   await context.setOffline(true);
   await page.reload();
-  await expect(page.locator(".CodeMirror")).toContainText("offline works");
+  await expect(page.locator(".cm-content")).toContainText("offline works");
   await page.getByRole("button", { name: "執行程式", exact: false }).click();
   await expect(page.locator(".result-text")).toContainText("offline works", {
     timeout: 90000,
@@ -450,30 +468,18 @@ test("editing a block updates Python and persists across reloads", async ({
   await editor(page);
   await setCode(page, 'print("before")');
   await page.getByRole("button", { name: "方塊", exact: true }).click();
-  await page.evaluate(() => {
-    const blockly = (
-      window as unknown as {
-        Blockly: {
-          getMainWorkspace(): {
-            getAllBlocks(): {
-              type: string;
-              setFieldValue(value: string, field: string): void;
-            }[];
-          };
-        };
-      }
-    ).Blockly;
-    const block = blockly
-      .getMainWorkspace()
-      .getAllBlocks()
-      .find((b) => b.type === "ast_Str");
-    if (!block) throw new Error("Expected a string block");
-    block.setFieldValue("from blocks", "TEXT");
+  await expect(page.locator(".block-sync-status")).toHaveCount(0, {
+    timeout: 90000,
   });
+  await page
+    .getByRole("button", { name: "Edit text: before", exact: true })
+    .click();
+  await page.locator(".blocklyHtmlInput").fill("from blocks");
+  await page.locator(".blocklyHtmlInput").press("Enter");
   await page.getByRole("button", { name: "程式碼", exact: true }).click();
-  await expect(page.locator(".CodeMirror")).toContainText("from blocks");
+  await expect(page.locator(".cm-content")).toContainText("from blocks");
   await page.reload();
-  await expect(page.locator(".CodeMirror")).toContainText("from blocks");
+  await expect(page.locator(".cm-content")).toContainText("from blocks");
 });
 
 test("long-running Python times out and leaves the editor usable", async ({

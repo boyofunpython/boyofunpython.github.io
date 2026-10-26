@@ -1,5 +1,7 @@
 import {
   useCallback,
+  lazy,
+  Suspense,
   useEffect,
   useRef,
   useState,
@@ -35,11 +37,14 @@ import {
   WifiOff,
   X,
 } from "lucide-react";
-import { Editor } from "./components/Editor";
+const Editor = lazy(() =>
+  import("./components/Editor").then((module) => ({ default: module.Editor })),
+);
 import { Dialog } from "./components/Dialog";
 import { ResultsDialog } from "./components/ResultsDialog";
 import { Classroom } from "./components/Classroom";
-import { courseStore, type EditorMode, type Mirror } from "./legacy";
+import { PythonConsole } from "./components/PythonConsole";
+import { type EditorMode, type EditorApi } from "./legacy";
 import { examples } from "./examples";
 import {
   fileNameError,
@@ -48,16 +53,24 @@ import {
   type CodeFile,
   type Workspace,
 } from "./storage";
-import { resetRuntime, runPython, type RunResult } from "./runtime";
+import {
+  resetRuntime,
+  runPython,
+  submitInput,
+  type InputRequest,
+  type RunResult,
+} from "./runtime";
 
-type View = "workspace" | "examples" | "classroom";
+type View = "workspace" | "examples" | "classroom" | "console";
 type Modal = "new" | "rename" | "delete" | "help" | null;
 const viewFromHash = (): View =>
   location.hash === "#/examples"
     ? "examples"
     : location.hash === "#/classroom"
       ? "classroom"
-      : "workspace";
+      : ["#/console", "#ide", "#/ide"].includes(location.hash)
+        ? "console"
+        : "workspace";
 const modes: { id: EditorMode; label: string; icon: typeof Code2 }[] = [
   { id: "split", label: "分割", icon: SplitSquareHorizontal },
   { id: "text", label: "程式碼", icon: Code2 },
@@ -71,6 +84,9 @@ export default function App() {
   const [storageError, setStorageError] = useState("");
   const [saved, setSaved] = useState("已儲存在此瀏覽器");
   const [view, setView] = useState<View>(viewFromHash);
+  const [openedWorkspace, setOpenedWorkspace] = useState(
+    () => viewFromHash() === "workspace",
+  );
   const [mode, setMode] = useState<EditorMode>(() =>
     matchMedia("(max-width: 900px)").matches ? "text" : "split",
   );
@@ -82,6 +98,8 @@ export default function App() {
   const running = useRef(false);
   const [result, setResult] = useState<RunResult | null>(null);
   const [runFile, setRunFile] = useState("");
+  const [runInput, setRunInput] = useState<InputRequest | null>(null);
+  const [liveOutput, setLiveOutput] = useState("");
   const [modal, setModal] = useState<Modal>(null);
   const [filename, setFilename] = useState("");
   const [formError, setFormError] = useState("");
@@ -102,7 +120,7 @@ export default function App() {
   const [activeExample, setActiveExample] = useState<
     (typeof examples)[number] | null
   >(null);
-  const editorRef = useRef<Mirror | null>(null);
+  const editorRef = useRef<EditorApi | null>(null);
   const resultReturnFocus = useRef<HTMLElement | null>(null);
   const lastView = useRef(view);
   const importRef = useRef<HTMLInputElement>(null);
@@ -149,11 +167,12 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [toast]);
   useEffect(() => {
-    document.title = `${view === "workspace" ? "Python 練習室" : view === "examples" ? "靈感範例" : "一起學習"} · 博幼輕鬆學 Python`;
+    document.title = `${view === "workspace" ? "Python 練習室" : view === "examples" ? "靈感範例" : view === "console" ? "Python Console" : "一起學習"} · 博幼輕鬆學 Python`;
   }, [view]);
   useEffect(() => {
     if (lastView.current === view) return;
     lastView.current = view;
+    if (view === "workspace") setOpenedWorkspace(true);
     const frame = requestAnimationFrame(() => {
       const main = document.getElementById("main-content");
       if (!main) return;
@@ -204,6 +223,8 @@ export default function App() {
     setRunState("loading");
     setResultsOpen(true);
     setResult(null);
+    setRunInput(null);
+    setLiveOutput("");
     const code = getCode();
     onCodeChange(code);
     setRunFile(
@@ -212,7 +233,20 @@ export default function App() {
       )?.name ?? "",
     );
     try {
-      setResult(await runPython(code, () => setRunState("running")));
+      setResult(
+        await runPython(
+          code,
+          () => setRunState("running"),
+          {
+            onInput: setRunInput,
+            onOutput: (text) => setLiveOutput((value) => value + text),
+          },
+          "run",
+          workspaceRef.current?.files.find(
+            (file) => file.id === workspaceRef.current?.activeId,
+          )?.name ?? "main.py",
+        ),
+      );
     } catch {
       setResult({
         text: "",
@@ -356,25 +390,11 @@ export default function App() {
       notify("無法讀取檔案，請重新選擇。", "error");
     }
   }
-  async function openCourse() {
-    const course = window.open("about:blank", "_blank");
-    if (course) course.opener = null;
-    try {
-      const store = await courseStore();
-      await store.setItem("user", {
-        uid: "__futurecoder_offline__",
-        editorContent: getCode(),
-      });
-      if (course)
-        course.location.href = new URL(
-          import.meta.env.BASE_URL + "course/#ide",
-          location.href,
-        ).href;
-      else notify("請允許開啟分頁後，再試一次。", "error");
-    } catch {
-      course?.close();
-      notify("無法傳送程式到虛擬機器，請先下載檔案。", "error");
-    }
+  function openConsole() {
+    onCodeChange(getCode());
+    fileMenuRef.current?.removeAttribute("open");
+    setNavOpen(false);
+    location.hash = "/console";
   }
   if (!workspace || !current)
     return (
@@ -400,7 +420,7 @@ export default function App() {
   const isBusy = runState !== "idle";
   return (
     <div
-      className={`app-shell ${view === "workspace" ? "is-workspace" : "is-browsing"}`}
+      className={`app-shell ${view === "workspace" ? "is-workspace" : view === "console" ? "is-console" : "is-browsing"}`}
     >
       <a
         className="skip-link"
@@ -432,6 +452,12 @@ export default function App() {
                 href: "#/examples",
                 label: "靈感範例",
                 icon: BookOpen,
+              },
+              {
+                id: "console",
+                href: "#/console",
+                label: "Python Console",
+                icon: Terminal,
               },
               {
                 id: "classroom",
@@ -547,7 +573,9 @@ export default function App() {
                 ? "程式練習室"
                 : view === "examples"
                   ? "靈感範例"
-                  : "一起學習"}
+                  : view === "console"
+                    ? "Python Console"
+                    : "一起學習"}
             </span>
           </div>
           <div className="topbar-actions">
@@ -588,7 +616,11 @@ export default function App() {
         <main
           id="main-content"
           tabIndex={-1}
-          className={view === "workspace" ? "workspace-main" : "content-scroll"}
+          className={
+            view === "workspace" || view === "console"
+              ? "workspace-main"
+              : "content-scroll"
+          }
         >
           {storageError && (
             <p className="error-banner" role="alert">
@@ -647,8 +679,8 @@ export default function App() {
                     <button onClick={download}>
                       <ArrowDownToLine size={16} /> 下載 .py 檔案
                     </button>
-                    <button onClick={openCourse}>
-                      <ExternalLink size={16} /> 開啟虛擬機器
+                    <button onClick={openConsole}>
+                      <ExternalLink size={16} /> 開啟 Python Console
                     </button>
                     <button
                       onClick={() => {
@@ -735,20 +767,32 @@ export default function App() {
               </details>
             )}
             <section className="editor-panel" aria-label="程式編輯區">
-              <Editor
-                code={current.code}
-                mode={mode}
-                toolbox={toolbox}
-                onChange={onCodeChange}
-                onReady={(mirror) => {
-                  editorRef.current = mirror;
-                  setEditorReady(true);
-                }}
-              />
+              {(openedWorkspace || view === "workspace") && (
+                <Suspense
+                  fallback={
+                    <div className="editor-loading" role="status">
+                      <LoaderCircle size={18} className="spin" />{" "}
+                      正在載入編輯器…
+                    </div>
+                  }
+                >
+                  {" "}
+                  <Editor
+                    code={current.code}
+                    mode={mode}
+                    toolbox={toolbox}
+                    onChange={onCodeChange}
+                    onReady={(mirror) => {
+                      editorRef.current = mirror;
+                      setEditorReady(true);
+                    }}
+                  />
+                </Suspense>
+              )}
             </section>
             <div className="editor-footer">
               <span>
-                <span className="status-dot" /> Python 3.10{" "}
+                <span className="status-dot" /> Python 3.14{" "}
                 <span className="footer-divider">·</span> UTF-8{" "}
                 <span className="footer-divider">·</span>{" "}
                 {current.code.split("\n").length} 行
@@ -764,6 +808,11 @@ export default function App() {
               </span>
             </div>
           </section>
+          <PythonConsole
+            active={view === "console"}
+            filename={current.name}
+            getCode={getCode}
+          />
           {view === "examples" && (
             <section className="examples-view">
               <div className="page-intro">
@@ -874,6 +923,11 @@ export default function App() {
       )}
       {resultsOpen && (
         <ResultsDialog
+          input={runInput}
+          liveOutput={liveOutput}
+          onInput={(value) => {
+            if (runInput) submitInput(runInput.id, value);
+          }}
           restoreFocus={resultReturnFocus.current}
           result={result}
           runState={runState}
@@ -996,10 +1050,11 @@ export default function App() {
                 按「停止執行」中止程式。執行超過 30 秒也會自動停止。重設 Python
                 環境會清除執行時的變數，保留你的程式檔案。
               </p>
-              <h3>需要輸入或完整課程？</h3>
+              <h3>需要互動輸入或查詢變數？</h3>
               <p>
-                檔案選單中的「開啟虛擬機器」會帶著目前程式開啟原有的 Python
-                學習平台。
+                檔案選單中的「開啟 Python
+                Console」會開啟本系統的互動環境。執行目前檔案後，可以直接輸入指令、查詢變數與使用
+                input()。
               </p>
             </div>
           )}
