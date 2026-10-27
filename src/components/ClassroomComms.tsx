@@ -35,6 +35,9 @@ const time = (at: number) =>
     minute: "2-digit",
   });
 interface Props {
+  settingsOpen: boolean;
+  onOpenSettings(): void;
+  openRequest: number;
   voice: VoiceProps;
   enabled: boolean;
   role: ClassroomRole | null;
@@ -208,6 +211,12 @@ export function ClassroomComms(props: Props) {
     error,
   } = props;
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (props.openRequest) {
+      setOpen(true);
+      setTab("messages");
+    }
+  }, [props.openRequest]);
   const [tab, setTab] = useState<"messages" | "code" | "voice">("messages");
   const [text, setText] = useState("");
   const [question, setQuestion] = useState("");
@@ -225,7 +234,8 @@ export function ClassroomComms(props: Props) {
   const latest = activity.at(-1)?.id;
   useEffect(() => {
     const readVisible = () => {
-      if (open && tab === "messages" && !document.hidden) props.onRead();
+      if (open && !props.settingsOpen && tab === "messages" && !document.hidden)
+        props.onRead();
     };
     document.addEventListener("visibilitychange", readVisible);
     window.addEventListener("focus", readVisible);
@@ -233,20 +243,29 @@ export function ClassroomComms(props: Props) {
       document.removeEventListener("visibilitychange", readVisible);
       window.removeEventListener("focus", readVisible);
     };
-  }, [open, tab, props.onRead]);
+  }, [open, props.settingsOpen, tab, props.onRead]);
   useEffect(() => {
     if (
       open &&
+      !props.settingsOpen &&
       tab === "messages" &&
       incoming &&
       activity.some((i) => i.id === incoming.id)
     )
       props.onDismissIncoming();
-  }, [open, tab, incoming?.id, activity, props.onDismissIncoming]);
+  }, [
+    open,
+    props.settingsOpen,
+    tab,
+    incoming?.id,
+    activity,
+    props.onDismissIncoming,
+  ]);
 
   useEffect(() => {
-    if (open && tab === "messages" && !document.hidden) props.onRead();
-  }, [open, tab, latest, props.onRead]);
+    if (open && !props.settingsOpen && tab === "messages" && !document.hidden)
+      props.onRead();
+  }, [open, props.settingsOpen, tab, latest, props.onRead]);
   useEffect(() => {
     if (incoming) {
       const timer = setTimeout(props.onDismissIncoming, 8000);
@@ -254,18 +273,24 @@ export function ClassroomComms(props: Props) {
     }
   }, [incoming?.id, props.onDismissIncoming]);
   useEffect(() => {
-    if (open && !reviewKey) {
+    if (open && !props.settingsOpen && !reviewKey) {
       const frame = requestAnimationFrame(() => {
         if (document.activeElement === document.body)
           panel.current?.querySelector<HTMLElement>("h2")?.focus();
       });
       return () => cancelAnimationFrame(frame);
     }
-  }, [open]);
+  }, [open, props.settingsOpen]);
   useEffect(() => {
-    if (open && tab === "messages" && follow.current && log.current)
+    if (
+      open &&
+      !props.settingsOpen &&
+      tab === "messages" &&
+      follow.current &&
+      log.current
+    )
       log.current.scrollTop = log.current.scrollHeight;
-  }, [open, tab, latest]);
+  }, [open, props.settingsOpen, tab, latest]);
   function close() {
     const previous = document.activeElement;
     setOpen(false);
@@ -285,7 +310,7 @@ export function ClassroomComms(props: Props) {
     } else setTab("messages");
     props.onDismissIncoming();
   }
-  if (!enabled) return null;
+  if (!enabled || props.settingsOpen) return null;
   return (
     <>
       <div className="classroom-live">
@@ -327,6 +352,9 @@ export function ClassroomComms(props: Props) {
             <span className={`classroom-dot ${connected ? "connected" : ""}`} />
             <MessageSquare size={18} />
             <span>教室通訊</span>
+            <span className="classroom-connection-count">
+              已連線：{connected} 位
+            </span>
             {unread > 0 && <b>{unread}</b>}
           </button>
         )}
@@ -358,7 +386,7 @@ export function ClassroomComms(props: Props) {
                   : role === "student"
                     ? "同學"
                     : "已離開教室"}{" "}
-                · {connected} 人連線
+                · <span>已連線：{connected} 位</span>
                 {role && !props.signalingOpen ? " · 訊號服務未連接" : ""}
               </p>
             </div>
@@ -656,7 +684,12 @@ export function ClassroomComms(props: Props) {
             </p>
           )}
           <footer>
-            <a href="#/classroom">返回教室與連線設定</a>
+            <button
+              className="classroom-settings-link"
+              onClick={props.onOpenSettings}
+            >
+              教室與分享設定
+            </button>
             <span>{props.status}</span>
           </footer>
         </div>

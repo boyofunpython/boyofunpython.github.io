@@ -67,18 +67,16 @@ import {
   type RunResult,
 } from "./runtime";
 
-type View = "workspace" | "examples" | "classroom" | "console" | "assistant";
+type View = "workspace" | "examples" | "console" | "assistant";
 type Modal = "new" | "rename" | "delete" | "help" | null;
 const viewFromHash = (): View =>
   location.hash === "#/assistant"
     ? "assistant"
     : location.hash === "#/examples"
       ? "examples"
-      : location.hash === "#/classroom"
-        ? "classroom"
-        : ["#/console", "#ide", "#/ide"].includes(location.hash)
-          ? "console"
-          : "workspace";
+      : ["#/console", "#ide", "#/ide"].includes(location.hash)
+        ? "console"
+        : "workspace";
 const modes: { id: EditorMode; label: string; icon: typeof Code2 }[] = [
   { id: "split", label: "分割", icon: SplitSquareHorizontal },
   { id: "text", label: "程式碼", icon: Code2 },
@@ -95,12 +93,33 @@ export default function App() {
   const [openedWorkspace, setOpenedWorkspace] = useState(
     () => viewFromHash() === "workspace",
   );
-  const [openedClassroom, setOpenedClassroom] = useState(
-    () => viewFromHash() === "classroom",
+  const [classroomOpen, setClassroomOpen] = useState(
+    () =>
+      location.hash === "#/classroom" ||
+      new URLSearchParams(location.search).has("peer"),
   );
-  useEffect(() => {
-    if (view === "classroom") setOpenedClassroom(true);
-  }, [view]);
+  const [joinLanding, setJoinLanding] = useState(() =>
+    new URLSearchParams(location.search).has("peer"),
+  );
+  function openClassroom() {
+    setNavOpen(false);
+    setClassroomOpen(true);
+  }
+  function closeClassroom() {
+    setClassroomOpen(false);
+    setJoinLanding(false);
+    const page = new URL(location.href);
+    page.searchParams.delete("peer");
+    if (page.hash === "#/classroom") page.hash = "/";
+    history.replaceState(history.state, "", page.href);
+  }
+  function joinedClassroom() {
+    closeClassroom();
+    const page = new URL(location.href);
+    page.hash = "/";
+    history.replaceState(history.state, "", page.href);
+    setView("workspace");
+  }
   const [openedAssistant, setOpenedAssistant] = useState(
     () => viewFromHash() === "assistant",
   );
@@ -160,10 +179,21 @@ export default function App() {
     }
   }, []);
   useEffect(() => {
+    if (location.hash === "#/classroom") {
+      const page = new URL(location.href);
+      page.hash = "/";
+      history.replaceState(history.state, "", page.href);
+    }
     readWorkspace()
       .then(update)
       .catch((error) => setStartupError(String(error.message ?? error)));
     const navigate = () => {
+      if (location.hash === "#/classroom") {
+        setClassroomOpen(true);
+        const page = new URL(location.href);
+        page.hash = "/";
+        history.replaceState(history.state, "", page.href);
+      }
       setView(viewFromHash());
       setNavOpen(false);
     };
@@ -490,12 +520,6 @@ export default function App() {
                 label: "AI 助教",
                 icon: Sparkles,
               },
-              {
-                id: "classroom",
-                href: "#/classroom",
-                label: "一起學習",
-                icon: Users,
-              },
             ].map((item) => (
               <a
                 key={item.id}
@@ -507,6 +531,10 @@ export default function App() {
                 {item.label}
               </a>
             ))}
+            <button onClick={openClassroom} aria-haspopup="dialog">
+              <Users size={19} />
+              一起學習
+            </button>
           </nav>
           <div className="drawer-files">
             <div className="file-heading">
@@ -612,6 +640,17 @@ export default function App() {
             </span>
           </div>
           <div className="topbar-actions">
+            <button
+              className="header-link classroom-entry"
+              aria-label="開啟教室設定"
+              title="教室與分享"
+              aria-haspopup="dialog"
+              aria-expanded={classroomOpen}
+              onClick={openClassroom}
+            >
+              <Users size={18} />
+              <span>教室</span>
+            </button>
             <a
               className="header-link"
               href="#/assistant"
@@ -974,18 +1013,21 @@ export default function App() {
               )}
             </section>
           )}
-          {(openedClassroom || view === "classroom") && (
-            <Classroom
-              active={view === "classroom"}
-              filename={current.name}
-              getCode={getCode}
-              receive={(code, name) => {
-                addFile(code, name);
-                setActiveExample(null);
-                notify("已另存收到的程式");
-              }}
-            />
-          )}
+          <Classroom
+            active={classroomOpen}
+            joinLanding={joinLanding}
+            onClose={closeClassroom}
+            onOpen={openClassroom}
+            onJoined={joinedClassroom}
+            filename={current.name}
+            getCode={getCode}
+            receive={(code, name) => {
+              closeClassroom();
+              addFile(code, name);
+              setActiveExample(null);
+              notify("已另存收到的程式");
+            }}
+          />
         </main>
       </div>
       {toast && (

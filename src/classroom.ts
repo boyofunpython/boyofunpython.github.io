@@ -118,7 +118,7 @@ export function classroomShareURL(id: string, pageURL: string): string {
   // Share only the room ID, not unrelated query parameters from the teacher URL.
   page.search = "";
   page.searchParams.set("peer", id);
-  page.hash = "/classroom";
+  page.hash = "/";
   return page.href;
 }
 export function classroomName(metadata: unknown): string {

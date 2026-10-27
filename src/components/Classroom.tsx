@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Copy, Radio, Send, Unplug, Users, LoaderCircle } from "lucide-react";
 import {
   CLASSROOM_TIMEOUT,
@@ -15,23 +15,36 @@ import {
   type ClassroomCode,
   type SentSubmission,
 } from "../classroom";
+import qrcode from "qrcode-generator";
+import { Dialog } from "./Dialog";
+import "./classroom-settings.css";
 import { ClassroomComms } from "./ClassroomComms";
 import { ClassroomVoice, initialVoiceState } from "../classroom-voice";
 import type { Peer as PeerClient, DataConnection as Connection } from "peerjs";
 
 export function Classroom({
   active,
+  joinLanding,
+  onClose,
+  onOpen,
+  onJoined,
   getCode,
   filename,
   receive,
 }: {
   active: boolean;
+  joinLanding: boolean;
+  onClose(): void;
+  onOpen(): void;
+  onJoined(): void;
   getCode: () => string;
   filename: string;
   receive: (code: string, name: string) => void;
 }) {
   const [voiceState, setVoiceState] = useState(initialVoiceState);
   const [voice] = useState(() => new ClassroomVoice(setVoiceState));
+  const [showTeacher, setShowTeacher] = useState(false);
+  const [commsRequest, setCommsRequest] = useState(0);
   const [role, setRole] = useState<ClassroomRole | null>(null);
   const [id, setId] = useState("");
   const [status, setStatus] = useState("");
@@ -80,6 +93,9 @@ export function Classroom({
     submissionsRef.current = next;
     setSubmissions(next);
   }
+  useEffect(() => {
+    if (error && !role) onOpen();
+  }, [error, role]);
   const peer = useRef<PeerClient | null>(null);
   const allConnections = useRef<Connection[]>([]);
   const timeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -172,6 +188,10 @@ export function Classroom({
           voice.add(connection);
           setError("");
           setStatus("已連線");
+          if (nextRole === "student") {
+            setCommsRequest((n) => n + 1);
+            onJoined();
+          }
         });
         connection.on("data", (raw) => {
           if (token !== session.current) return;
@@ -394,6 +414,20 @@ export function Classroom({
   }
   const shareLink =
     role === "teacher" && id ? classroomShareURL(id, location.href) : "";
+  const qrImage = useMemo(() => {
+    if (!shareLink) return "";
+    try {
+      const qr = qrcode(0, "M");
+      qr.addData(shareLink, "Byte");
+      qr.make();
+      return (
+        "data:image/svg+xml;charset=utf-8," +
+        encodeURIComponent(qr.createSvgTag({ cellSize: 6, margin: 24 }))
+      );
+    } catch {
+      return "";
+    }
+  }, [shareLink]);
   async function copyLink() {
     if (!shareLink || !signalingOpen) return;
     setError("");
@@ -549,158 +583,265 @@ export function Classroom({
   }
   return (
     <>
-      <div hidden={!active} className="classroom-content">
-        <div className="page-intro">
-          <span className="eyebrow">LEARN TOGETHER</span>
-          <h1>一起寫，學得更多。</h1>
-          <p>
-            老師即時廣播，同學送交程式。連線後，任何頁面都能用右下角「教室通訊」收發訊息與檢查程式。
-          </p>
-        </div>
-        <div className="classroom-grid">
-          <section className="panel classroom-card">
-            <div className="feature-icon">
-              <Radio />
+      {active && (
+        <Dialog
+          title={
+            joinLanding && !showTeacher && role !== "teacher"
+              ? "加入老師的教室"
+              : "教室與分享"
+          }
+          className={`classroom-settings ${joinLanding && !showTeacher && role !== "teacher" ? "classroom-join" : ""}`}
+          onClose={onClose}
+          focusHeading={!(joinLanding && !role)}
+        >
+          <div className="classroom-content">
+            <div className="page-intro">
+              <span className="eyebrow">LEARN TOGETHER</span>
+              <h3>
+                {role === "student" && connections.length
+                  ? "你已加入老師的教室。"
+                  : joinLanding && !showTeacher
+                    ? "準備好，一起開始練習。"
+                    : "邀請同學，一起開始練習。"}
+              </h3>
+              <p>
+                老師即時廣播，同學送交程式。連線後，任何頁面都能用右下角「教室通訊」收發訊息與檢查程式。
+              </p>
             </div>
-            <h2>我是老師</h2>
-            <p>建立教室連結，邀請同學加入，並傳送目前編輯中的程式。</p>
-            <button
-              className="primary"
-              disabled={role !== null}
-              onClick={() => connect("teacher")}
-            >
-              建立教室 <Radio size={16} />
-            </button>
-          </section>
-          <section className="panel classroom-card">
-            <div className="feature-icon mint">
-              <Users />
-            </div>
-            <h2>我是同學</h2>
-            <p>填入老師提供的連線 ID，準備好一起練習。</p>
-            <label>
-              你的暱稱
-              <input
-                disabled={role !== null}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                maxLength={40}
-                autoComplete="off"
-              />
-            </label>
-            <label>
-              老師的連線 ID
-              <input
-                disabled={role !== null}
-                value={teacher}
-                onChange={(e) => setTeacher(e.target.value)}
-                autoComplete="off"
-              />
-            </label>
-            <button
-              className="primary"
-              disabled={role !== null}
-              onClick={() => connect("student")}
-            >
-              加入教室 <Send size={16} />
-            </button>
-          </section>
-        </div>
-        {role && (
-          <section className="panel connection-panel">
-            <div>
-              <h2>
-                {id ? (
-                  "教室連線"
-                ) : (
-                  <>
-                    <LoaderCircle size={18} className="spin" /> 正在連線
-                  </>
+            {(!role || (role === "student" && !connections.length)) && (
+              <div className="classroom-grid">
+                {(!joinLanding || showTeacher) && (
+                  <section className="panel classroom-card">
+                    <div className="feature-icon">
+                      <Radio />
+                    </div>
+                    <h2>我是老師</h2>
+                    <p>建立教室連結，邀請同學加入，並傳送目前編輯中的程式。</p>
+                    <button
+                      className="primary"
+                      disabled={role !== null}
+                      onClick={() => connect("teacher")}
+                    >
+                      建立教室 <Radio size={16} />
+                    </button>
+                  </section>
                 )}
-              </h2>
-              <p role="status">{status}</p>
-              {role === "teacher" && id && (
-                <>
+                <form
+                  className="panel classroom-card"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void connect("student");
+                  }}
+                >
+                  <div className="feature-icon mint">
+                    <Users />
+                  </div>
+                  <h2>我是同學</h2>
+                  <p>
+                    {joinLanding && !showTeacher
+                      ? "這是老師分享的教室，輸入你的暱稱即可加入。"
+                      : "填入老師提供的連線 ID，準備好一起練習。"}
+                  </p>
                   <label>
-                    連線 ID
-                    <input readOnly value={id} />
-                  </label>
-                  <label>
-                    教室分享連結
+                    你的暱稱
                     <input
-                      readOnly
-                      value={shareLink}
-                      onFocus={(e) => e.currentTarget.select()}
+                      data-dialog-autofocus
+                      disabled={role !== null}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      maxLength={40}
+                      autoComplete="off"
                     />
                   </label>
-                  <button disabled={!signalingOpen} onClick={copyLink}>
-                    <Copy size={16} /> 複製教室連結
+                  {joinLanding && !showTeacher ? (
+                    <details className="classroom-join-details">
+                      <summary>教室連線資訊</summary>{" "}
+                      <label>
+                        老師的連線 ID
+                        <input
+                          readOnly
+                          value={teacher}
+                          onChange={(e) => setTeacher(e.target.value)}
+                          autoComplete="off"
+                        />
+                      </label>
+                    </details>
+                  ) : (
+                    <>
+                      {" "}
+                      <label>
+                        老師的連線 ID
+                        <input
+                          disabled={role !== null}
+                          value={teacher}
+                          onChange={(e) => setTeacher(e.target.value)}
+                          autoComplete="off"
+                        />
+                      </label>
+                    </>
+                  )}
+                  <button
+                    className="primary"
+                    disabled={role !== null}
+                    type="submit"
+                  >
+                    加入教室 <Send size={16} />
                   </button>
-                </>
-              )}
-              {!signalingOpen && id && (
-                <button disabled={reconnecting} onClick={reconnect}>
-                  重新連接服務
+                </form>
+              </div>
+            )}
+            {joinLanding && !showTeacher && !role && (
+              <button
+                className="classroom-switch-role"
+                onClick={() => setShowTeacher(true)}
+              >
+                改為建立教室
+              </button>
+            )}
+            {role && (
+              <section
+                className={`panel connection-panel ${role === "teacher" && id ? "has-share" : ""}`}
+              >
+                <div>
+                  <h2>
+                    {id ? (
+                      "教室連線"
+                    ) : (
+                      <>
+                        <LoaderCircle size={18} className="spin" /> 正在連線
+                      </>
+                    )}
+                  </h2>
+                  <p role="status">{status}</p>
+                  {role === "teacher" && id && (
+                    <>
+                      <label>
+                        連線 ID
+                        <input readOnly value={id} />
+                      </label>
+                      <label>
+                        教室分享連結
+                        <input
+                          readOnly
+                          value={shareLink}
+                          onFocus={(e) => e.currentTarget.select()}
+                        />
+                      </label>
+                      <button disabled={!signalingOpen} onClick={copyLink}>
+                        <Copy size={16} /> 複製教室連結
+                      </button>
+                    </>
+                  )}
+                  {!signalingOpen && id && (
+                    <button disabled={reconnecting} onClick={reconnect}>
+                      重新連接服務
+                    </button>
+                  )}
+                  {notice && <p role="status">{notice}</p>}
+                  <p>已連線：{connections.length} 位</p>
+                  {connections.map((c) => (
+                    <span className="tag" key={c.peer}>
+                      {role === "student" ? "老師" : classroomName(c.metadata)}
+                    </span>
+                  ))}
+                </div>
+                {role === "teacher" && id && (
+                  <aside className="classroom-qr" aria-label="教室 QR Code">
+                    {qrImage ? (
+                      <>
+                        <img
+                          src={qrImage}
+                          alt="掃描加入教室的 QR Code"
+                          width="288"
+                          height="288"
+                        />
+                        <p>請同學用手機掃描，填暱稱後加入。</p>
+                        <a href={qrImage} download="classroom-qr.svg">
+                          下載 QR Code
+                        </a>
+                      </>
+                    ) : (
+                      <p>無法產生 QR Code，請複製上方分享連結。</p>
+                    )}
+                    {!signalingOpen && (
+                      <p role="status">服務未連接，請先重新連接再分享。</p>
+                    )}
+                  </aside>
+                )}
+                <div className="connection-actions">
+                  <button
+                    className="primary"
+                    disabled={!connections.length}
+                    onClick={() => sendCode()}
+                  >
+                    <Send size={16} />
+                    {role === "teacher"
+                      ? "傳送目前程式給同學"
+                      : "傳送目前程式給老師"}
+                  </button>
+                  <button onClick={disconnect}>
+                    <Unplug size={16} /> 結束連線
+                  </button>
+                </div>
+              </section>
+            )}
+            {error && (
+              <p className="error-banner" role="alert">
+                {error}
+              </p>
+            )}
+            {inbox.map((item) => (
+              <div className="panel inbox" key={item.key}>
+                <div>
+                  <strong>收到{item.name}的程式</strong>
+                  <pre>{item.code.slice(0, 240)}</pre>
+                </div>
+                <button onClick={() => reviewCode(item.key)}>
+                  {item.fromStudent ? "檢查程式" : "預覽程式"}
+                </button>
+                <button
+                  className="primary"
+                  onClick={() => saveReceived(item.key)}
+                >
+                  另存並開啟
+                </button>
+                <button
+                  onClick={() =>
+                    setInbox((items) => items.filter((i) => i.key !== item.key))
+                  }
+                >
+                  略過
+                </button>
+              </div>
+            ))}
+            <p className="muted classroom-note">
+              {joinLanding && !showTeacher && !role
+                ? "連線後會直接進入程式練習室；麥克風預設關閉。"
+                : role === "teacher"
+                  ? "關閉設定不會離線。老師請保留此分頁，讓同學持續加入；重整或關閉分頁後需要分享新連結。"
+                  : "關閉設定不會離線。若要離開，請按「結束連線」；重整或關閉分頁也會結束連線。"}
+            </p>
+            <div className="classroom-settings-actions">
+              <button onClick={onClose}>關閉設定</button>
+              {role === "teacher" && id && (
+                <button
+                  className="primary"
+                  onClick={() => {
+                    setCommsRequest((n) => n + 1);
+                    onJoined();
+                  }}
+                >
+                  開始上課
                 </button>
               )}
-              {notice && <p role="status">{notice}</p>}
-              <p>已連線：{connections.length} 位</p>
-              {connections.map((c) => (
-                <span className="tag" key={c.peer}>
-                  {role === "student" ? "老師" : classroomName(c.metadata)}
-                </span>
-              ))}
             </div>
-            <div className="connection-actions">
-              <button
-                className="primary"
-                disabled={!connections.length}
-                onClick={() => sendCode()}
-              >
-                <Send size={16} />
-                {role === "teacher"
-                  ? "傳送目前程式給同學"
-                  : "傳送目前程式給老師"}
-              </button>
-              <button onClick={disconnect}>
-                <Unplug size={16} /> 結束連線
-              </button>
-            </div>
-          </section>
-        )}
-        {error && (
-          <p className="error-banner" role="alert">
-            {error}
-          </p>
-        )}
-        {inbox.map((item) => (
-          <div className="panel inbox" key={item.key}>
-            <div>
-              <strong>收到{item.name}的程式</strong>
-              <pre>{item.code.slice(0, 240)}</pre>
-            </div>
-            <button onClick={() => reviewCode(item.key)}>
-              {item.fromStudent ? "檢查程式" : "預覽程式"}
-            </button>
-            <button className="primary" onClick={() => saveReceived(item.key)}>
-              另存並開啟
-            </button>
-            <button
-              onClick={() =>
-                setInbox((items) => items.filter((i) => i.key !== item.key))
-              }
-            >
-              略過
-            </button>
           </div>
-        ))}
-        <p className="muted classroom-note">
-          使用公共 PeerJS
-          服務。切回編輯器或其他頁面會保持連線；按「結束連線」或關閉本分頁才會離開。老師需保留此分頁，分享連結才可繼續使用。右下角「教室通訊」可廣播、送交程式與檢查回覆；收到的程式不會自動執行，最多保留最近
-          20 份。
-        </p>
-      </div>
+        </Dialog>
+      )}
       <ClassroomComms
+        settingsOpen={active}
+        onOpenSettings={onOpen}
+        openRequest={commsRequest}
         voice={{ controller: voice, state: voiceState }}
         enabled={hadSession || inbox.length > 0}
         role={role}

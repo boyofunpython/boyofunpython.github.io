@@ -1,3 +1,4 @@
+import jsQR from "jsqr";
 import { chromium, expect } from "@playwright/test";
 import { writeFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -47,7 +48,8 @@ const errors = [];
 const panel = (page) =>
   page.getByRole("dialog", { name: "教室通訊", exact: true });
 async function dock(page) {
-  await page.getByRole("button", { name: /開啟教室通訊/ }).click();
+  if (!(await panel(page).isVisible()))
+    await page.getByRole("button", { name: /開啟教室通訊/ }).click();
   await panel(page).getByRole("button", { name: /^訊息/ }).click();
 }
 async function closeDock(page) {
@@ -56,15 +58,24 @@ async function closeDock(page) {
     .click();
 }
 async function editor(page, code) {
-  await page.getByRole("link", { name: "返回編輯器", exact: true }).click();
+  if (await page.locator("dialog.classroom-settings").isVisible())
+    await page
+      .locator("dialog.classroom-settings")
+      .getByRole("button", { name: "關閉設定", exact: true })
+      .click();
+  if (
+    await page
+      .getByRole("link", { name: "返回編輯器", exact: true })
+      .isVisible()
+  )
+    await page.getByRole("link", { name: "返回編輯器", exact: true }).click();
   await page.getByRole("button", { name: "程式碼", exact: true }).click();
   await page
     .getByRole("textbox", { name: "Python 程式碼", exact: true })
     .fill(code);
 }
 async function room(page) {
-  await page.getByRole("button", { name: "開啟選單", exact: true }).click();
-  await page.getByRole("link", { name: "一起學習", exact: true }).click();
+  await page.getByRole("button", { name: "開啟教室設定", exact: true }).click();
 }
 try {
   for (let i = 0; i < 3; i++)
@@ -126,7 +137,10 @@ try {
           return stream;
         };
       });
-  await teacher.goto(base + "#/classroom");
+  await teacher.goto(base + "#/");
+  await teacher
+    .getByRole("button", { name: "開啟教室設定", exact: true })
+    .click();
   await teacher.getByRole("button", { name: "建立教室", exact: false }).click();
   await expect(teacher.getByLabel("連線 ID", { exact: true })).not.toHaveValue(
     "",
@@ -139,8 +153,25 @@ try {
   await expect(teacher.getByLabel("教室分享連結", { exact: true })).toHaveValue(
     link,
   );
+  const bitmap = await teacher
+    .getByRole("img", { name: "掃描加入教室的 QR Code", exact: true })
+    .evaluate(async (image) => {
+      await image.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 512;
+      const context = canvas.getContext("2d");
+      context.fillStyle = "white";
+      context.fillRect(0, 0, 512, 512);
+      context.drawImage(image, 0, 0, 512, 512);
+      return Array.from(context.getImageData(0, 0, 512, 512).data);
+    });
+  if (jsQR(new Uint8ClampedArray(bitmap), 512, 512)?.data !== link)
+    throw Error("QR share URL mismatch");
   for (const [i, page] of [student, witness].entries()) {
     await page.goto(link);
+    await expect(
+      page.getByRole("dialog", { name: "加入老師的教室", exact: true }),
+    ).toBeVisible();
     await expect(page.getByLabel("老師的連線 ID", { exact: true })).toHaveValue(
       new URL(link).searchParams.get("peer"),
     );
@@ -151,6 +182,10 @@ try {
     await expect(page.getByText("已連線：1 位", { exact: true })).toBeVisible({
       timeout: 30000,
     });
+    await expect(page.locator("dialog.classroom-settings")).toHaveCount(0);
+    await expect(
+      page.getByRole("dialog", { name: "教室通訊", exact: true }),
+    ).toBeVisible();
   }
   await expect(
     teacher.getByText("已連線：2 位", { exact: true }),
@@ -284,6 +319,8 @@ try {
     base,
     signaling: [...signaling],
     isolatedBrowsers: 3,
+    qrDecodesToExactShareLink: true,
+    sharedLinkFullscreenJoinAndAutoCommunications: true,
     copyActionUsesExactShareLink: true,
     teacherLinkPrefill: true,
     crossPageBroadcastToTwoStudents: true,
@@ -461,7 +498,14 @@ async function verifyClassroomVoice(teacher, student, witness) {
   await expect(
     witness.getByText("已連線：1 位", { exact: true }),
   ).toBeVisible();
-  await witness.getByRole("link", { name: "返回編輯器", exact: true }).click();
+  if (
+    await witness
+      .getByRole("link", { name: "返回編輯器", exact: true })
+      .isVisible()
+  )
+    await witness
+      .getByRole("link", { name: "返回編輯器", exact: true })
+      .click();
   await voiceTab(witness);
   await listen(witness);
   await heard(witness, 1);

@@ -252,7 +252,7 @@ test("mobile layout, keyboard and dialog interactions", async ({ page }) => {
     animations: "disabled",
   });
   await page.getByRole("button", { name: "開啟選單", exact: true }).click();
-  await page.getByRole("link", { name: "一起學習", exact: true }).click();
+  await page.getByRole("button", { name: "一起學習", exact: true }).click();
   await page.getByRole("button", { name: "加入教室", exact: false }).click();
   await expect(page.getByRole("alert")).toContainText("請輸入連線 ID");
   expect(
@@ -398,7 +398,7 @@ test.describe("classroom transport", () => {
     await editor(page);
     await setCode(page, 'print("teacher draft")');
     await openNav(page);
-    await page.getByRole("link", { name: "一起學習", exact: true }).click();
+    await page.getByRole("button", { name: "一起學習", exact: true }).click();
     await page.getByRole("button", { name: "建立教室", exact: false }).click();
     await expect(page.getByText("教室已開啟，等待同學加入")).toBeVisible();
     await page.evaluate(() =>
@@ -437,7 +437,7 @@ test.describe("classroom transport", () => {
       ),
     ).toBe(false);
     await openNav(page);
-    await page.getByRole("link", { name: "一起學習", exact: true }).click();
+    await page.getByRole("button", { name: "一起學習", exact: true }).click();
     await expect(page.getByLabel("連線 ID", { exact: true })).toHaveValue(
       "test-classroom-id",
     );

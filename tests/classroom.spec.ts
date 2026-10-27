@@ -10,14 +10,20 @@ import {
 // CI remains deterministic. Public-cloud acceptance uses three isolated real
 // browsers and synthetic data via scripts/check-classroom-public.mjs.
 test.use({ serviceWorkers: "block" });
-import { setup, peer, create, roomView } from "./fixtures/classroom";
+import {
+  setup,
+  peer,
+  create,
+  roomView,
+  backToEditor,
+} from "./fixtures/classroom";
 
 test("share URL preserves deployment path and shares only the current room ID", () => {
   const url = classroomShareURL(
     "new-room-id",
     "https://example.test/python/?peer=old-room&unrelated=private#/assistant",
   );
-  expect(url).toBe("https://example.test/python/?peer=new-room-id#/classroom");
+  expect(url).toBe("https://example.test/python/?peer=new-room-id#/");
   expect(
     new URL(
       classroomShareURL("room id", "https://example.test/#/"),
@@ -44,7 +50,7 @@ test("teacher link copies exactly, pre-fills student ID and survives editing", a
     ),
   ).toBe(link);
   await peer(page, (p) => p.add("端 A"));
-  await page.getByRole("link", { name: "返回編輯器", exact: true }).click();
+  await backToEditor(page);
   await page.getByRole("button", { name: "程式碼", exact: true }).click();
   await page
     .getByRole("textbox", { name: "Python 程式碼", exact: true })
@@ -152,6 +158,7 @@ test("broker reconnect keeps room ID and student does not create duplicate data 
   await page.getByRole("button", { name: "加入教室", exact: false }).click();
   await expect(page.getByText("已連線：1 位", { exact: true })).toBeVisible();
   await peer(page, (p) => p.emit("disconnected"));
+  await roomView(page);
   await page.getByRole("button", { name: "重新連接服務", exact: true }).click();
   await expect(
     page.getByText("教室服務已重新連接", { exact: true }),
@@ -175,6 +182,7 @@ test("expired link, timeout and inbox after disconnect preserve the user's Pytho
     for (let i = 0; i < 25; i++)
       p.outgoing.emit("data", { type: "teacherInfo", code: `print(${i})` });
   });
+  await roomView(page);
   await expect(page.locator(".inbox")).toHaveCount(MAX_INBOX);
   await page.getByRole("button", { name: "結束連線", exact: true }).click();
   await page

@@ -1,6 +1,12 @@
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { setup, peer, create, roomView } from "./fixtures/classroom";
+import {
+  setup,
+  peer,
+  create,
+  roomView,
+  backToEditor,
+} from "./fixtures/classroom";
 import {
   MAX_CLASSROOM_TEXT,
   MAX_INBOX,
@@ -12,10 +18,20 @@ test.use({ serviceWorkers: "block" });
 const comms = (page: Page) =>
   page.getByRole("dialog", { name: "教室通訊", exact: true });
 async function openComms(page: Page) {
-  await page.getByRole("button", { name: /開啟教室通訊/ }).click();
+  if (await page.locator("dialog.classroom-settings").isVisible())
+    await page
+      .locator("dialog.classroom-settings")
+      .getByRole("button", { name: "關閉設定", exact: true })
+      .click();
+  if (
+    !(await page
+      .getByRole("dialog", { name: "教室通訊", exact: true })
+      .isVisible())
+  )
+    await page.getByRole("button", { name: /開啟教室通訊/ }).click();
 }
 async function edit(page: Page, code: string) {
-  await page.getByRole("link", { name: "返回編輯器", exact: true }).click();
+  await backToEditor(page);
   await page.getByRole("button", { name: "程式碼", exact: true }).click();
   await page
     .getByRole("textbox", { name: "Python 程式碼", exact: true })
@@ -322,6 +338,7 @@ test("global communications remain usable across examples, AI and console and fi
   await setup(page);
   await create(page);
   await peer(page, (p) => p.add("端 A"));
+  await backToEditor(page);
   for (const route of ["/", "/examples", "/assistant", "/console"]) {
     await page.evaluate((hash) => {
       location.hash = hash;

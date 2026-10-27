@@ -1,6 +1,12 @@
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { setup, peer, create, roomView } from "./fixtures/classroom";
+import {
+  setup,
+  peer,
+  create,
+  roomView,
+  backToEditor,
+} from "./fixtures/classroom";
 
 test.use({ serviceWorkers: "block" });
 const panel = (page: Page) =>
@@ -8,7 +14,17 @@ const panel = (page: Page) =>
 const controls = (page: Page) =>
   page.getByRole("region", { name: "教室語音控制" });
 async function voiceTab(page: Page) {
-  await page.getByRole("button", { name: /開啟教室通訊/ }).click();
+  if (await page.locator("dialog.classroom-settings").isVisible())
+    await page
+      .locator("dialog.classroom-settings")
+      .getByRole("button", { name: "關閉設定", exact: true })
+      .click();
+  if (
+    !(await page
+      .getByRole("dialog", { name: "教室通訊", exact: true })
+      .isVisible())
+  )
+    await page.getByRole("button", { name: /開啟教室通訊/ }).click();
   await panel(page).getByRole("button", { name: /^語音/ }).click();
 }
 async function microphone(
@@ -57,7 +73,7 @@ async function microphone(
   }, mode);
 }
 async function edit(page: Page) {
-  await page.getByRole("link", { name: "返回編輯器", exact: true }).click();
+  await backToEditor(page);
   await page.getByRole("button", { name: "程式碼", exact: true }).click();
   await page
     .getByRole("textbox", { name: "Python 程式碼", exact: true })
@@ -131,7 +147,7 @@ test("teacher microphone reaches all students and late joiners, preserves editin
   expect(await peer(page, (p) => p.calls.every((c) => c.closed))).toBe(true);
   await roomView(page);
   await expect(page.getByText("已連線：3 位", { exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "返回編輯器", exact: true }).click();
+  await backToEditor(page);
   await expect(
     page.getByRole("textbox", { name: "Python 程式碼", exact: true }),
   ).toContainText("continued voice edit");
@@ -212,6 +228,8 @@ test("student can listen without microphone permission and speak only to the tea
     .getByRole("button", { name: "收合教室通訊", exact: true })
     .click();
   await roomView(page);
+  if (!(await page.locator("dialog.classroom-settings").isVisible()))
+    await roomView(page);
   await page.getByRole("button", { name: "結束連線", exact: true }).click();
   await expect(page.locator("audio[data-classroom-voice]")).toHaveCount(0);
   expect((await mic(page)).tracks[0].state).toBe("ended");
@@ -294,6 +312,8 @@ test("cancelling or disconnecting while permission is pending stops a late micro
   await panel(page)
     .getByRole("button", { name: "收合教室通訊", exact: true })
     .click();
+  if (!(await page.locator("dialog.classroom-settings").isVisible()))
+    await roomView(page);
   await page.getByRole("button", { name: "結束連線", exact: true }).click();
   await page.evaluate(() =>
     (window as unknown as { resolveMic(): void }).resolveMic(),
@@ -438,12 +458,15 @@ test("stalled voice calls time out independently and explicit retry and broker r
   await panel(page)
     .getByRole("button", { name: "收合教室通訊", exact: true })
     .click();
+  await roomView(page);
   await page.getByRole("button", { name: "重新連接服務", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "複製教室連結", exact: true }),
   ).toBeEnabled();
   expect(await peer(page, (p) => p.calls.length)).toBe(2);
   expect((await mic(page)).requests).toBe(1);
+  if (!(await page.locator("dialog.classroom-settings").isVisible()))
+    await roomView(page);
   await page.getByRole("button", { name: "結束連線", exact: true }).click();
   expect((await mic(page)).tracks[0].state).toBe("ended");
 });

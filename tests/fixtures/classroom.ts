@@ -94,10 +94,30 @@ export const peer = (page: Page, code: (room: TestPeer) => unknown) =>
     return fn((window as unknown as { room: TestPeer }).room);
   }, code.toString());
 export async function create(page: Page) {
-  await page.getByRole("button", { name: "建立教室", exact: false }).click();
+  if (
+    !(await page
+      .getByRole("button", { name: "建立教室", exact: true })
+      .isVisible())
+  )
+    await page
+      .getByRole("button", { name: "改為建立教室", exact: true })
+      .click();
+  await page.getByRole("button", { name: "建立教室", exact: true }).click();
   await expect(page.getByLabel("連線 ID", { exact: true })).not.toHaveValue("");
 }
 export async function roomView(page: Page) {
-  await page.getByRole("button", { name: "開啟選單", exact: true }).click();
-  await page.getByRole("link", { name: "一起學習", exact: true }).click();
+  await page.getByRole("button", { name: "開啟教室設定", exact: true }).click();
+}
+export async function backToEditor(page: Page) {
+  if (await page.locator("dialog.classroom-settings").isVisible())
+    await page
+      .locator("dialog.classroom-settings")
+      .getByRole("button", { name: "關閉設定", exact: true })
+      .click();
+  if (
+    await page
+      .getByRole("link", { name: "返回編輯器", exact: true })
+      .isVisible()
+  )
+    await page.getByRole("link", { name: "返回編輯器", exact: true }).click();
 }
