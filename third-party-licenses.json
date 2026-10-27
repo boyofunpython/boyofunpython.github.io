@@ -1396,6 +1396,16 @@
     "texts": {}
   },
   {
+    "name": "qrcode-generator",
+    "version": "2.0.4",
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/kazuhikoarase/qrcode-generator.git"
+    },
+    "texts": {}
+  },
+  {
     "name": "react",
     "version": "19.3.1",
     "license": "MIT",

@@ -11,6 +11,8 @@ npm 版本由 `package-lock.json` 鎖定。以下為主要直接依賴；各套�
 | Pyodide                     | MPL-2.0              | https://github.com/pyodide/pyodide                                                  |
 | CPython 與標準函式庫        | PSF-2.0 及其內含授權 | https://github.com/python/cpython                                                   |
 | @xmldom/xmldom              | MIT                  | https://github.com/xmldom/xmldom                                                    |
+| QR Code Generator           | MIT                  | https://github.com/kazuhikoarase/qrcode-generator                                   |
+| jsQR（僅測試）              | Apache-2.0           | https://github.com/cozmo/jsQR                                                       |
 | PeerJS                      | MIT                  | https://github.com/peers/peerjs                                                     |
 | localForage                 | Apache-2.0           | https://github.com/localForage/localForage                                          |
 | Lucide                      | ISC                  | https://github.com/lucide-icons/lucide                                              |

@@ -1,9 +1,9 @@
 {
   "application": "boyo-python-studio",
   "version": "2.0.0",
-  "source_commit": "29c65294f260019f7630a070374f3ddd9348512b",
+  "source_commit": "75a38902253ba78aa06c4519ab6b185054a1ea9c",
   "legacy_commit": "66ac086bc5f52e291f967571c1deafb2dd17b3b4",
-  "previous_release_commit": "4bf6522f5e8959f17e00f4b19a2abfa346e940b7",
-  "built_at": "2026-10-26T23:19:05.829796+00:00",
-  "artifact_sha256": "4330d8ae1d9b20cf5f3f41f91be32d37298109da5d88e1f0a9c40a75d4cf24e6"
+  "previous_release_commit": "1906632f4597c6fc809c99eaec061d505dd212f6",
+  "built_at": "2026-10-27T00:04:49.112491+00:00",
+  "artifact_sha256": "c139af143f973e1ad84087b82770a23c483b91b347d6ba2805dec2f504ca66df"
 }
